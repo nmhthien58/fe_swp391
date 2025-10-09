@@ -1,4 +1,4 @@
-CHẠY "npm install" TRONG TERMINAL TRƯỚC KHI RUN PROJECT
+CHẠY "npm install" TRONG TERMINAL TRƯỚC KHI RUN PROJECT!!
 
 # React + Vite
 
