@@ -13,6 +13,7 @@ import { Link, Outlet, useNavigate } from "react-router-dom";
 import { IoPeopleOutline } from "react-icons/io5";
 import { HiLocationMarker } from "react-icons/hi";
 import { PiPackage } from "react-icons/pi";
+import { FaChargingStation } from "react-icons/fa";
 // import { useDispatch, useSelector } from "react-redux"; // Import useSelector to get data from Redux
 // import { logout } from "../../redux/accountSlice";
 
@@ -28,7 +29,7 @@ function getItem(label, key, icon, children) {
 }
 
 const items = [
-  getItem("Manage Station", "station", <HiLocationMarker size={15} />),
+  getItem("Manage Station", "station", <FaChargingStation size={15} />),
   getItem("Manage User", "user", <IoPeopleOutline size={15} />),
   getItem(
     "Manage Battery Rent Package",

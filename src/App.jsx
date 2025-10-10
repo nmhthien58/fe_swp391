@@ -13,7 +13,7 @@ import ManageBatteryRentPackage from "./pages/manage-batteryrentpackage/index.js
 import Overview from "./pages/overview-page/index.jsx";
 import ManageComplaints from "./pages/complaints/index.jsx";
 import Homepage from "./pages/homepage/index.jsx";
-
+import StaffDashboard from "./components/staff-dashboard/index.jsx";
 function App() {
   const router = createBrowserRouter([
     {
@@ -53,6 +53,10 @@ function App() {
           element: <ManageComplaints />,
         },
       ],
+    },
+    {
+      path: "/staff",
+      element: <StaffDashboard />,
     },
     {
       path: "/",

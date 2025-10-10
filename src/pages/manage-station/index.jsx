@@ -140,7 +140,11 @@ const ManageStation = () => {
           Manage Station
         </h2>
       </div>
-      <Button type="primary" onClick={() => setOpen(true)}>
+      <Button
+        type="primary"
+        onClick={() => setOpen(true)}
+        style={{ marginBottom: 16 }}
+      >
         Add station
       </Button>
       <Table columns={colums} dataSource={categories} />
