@@ -14,6 +14,8 @@ import Overview from "./pages/overview-page/index.jsx";
 import ManageComplaints from "./pages/complaints/index.jsx";
 import Homepage from "./pages/homepage/index.jsx";
 import StaffDashboard from "./components/dashboard/staff.jsx";
+import ManageStockBattery from "./pages/manage-stockbattery/index.jsx";
+import ManageBatterySwapTransaction from "./pages/manage-batteryswaptransaction/index.jsx";
 function App() {
   const router = createBrowserRouter([
     {
@@ -57,6 +59,17 @@ function App() {
     {
       path: "/staff",
       element: <StaffDashboard />,
+      children: [
+        {
+          index: true, // This makes it the default
+          element: <Navigate to="stock" replace />,
+        },
+        { path: "stock", element: <ManageStockBattery /> },
+        {
+          path: "swap",
+          element: <ManageBatterySwapTransaction />,
+        },
+      ],
     },
     {
       path: "/",

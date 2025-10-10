@@ -6,10 +6,11 @@ import {
   TeamOutlined,
   UserOutlined,
   LogoutOutlined,
-  WarningOutlined, // Added for dropdown menu
+  WarningOutlined,
+  HomeFilled, // Added for dropdown menu
 } from "@ant-design/icons";
 import { Breadcrumb, Layout, Menu, theme, Avatar, Dropdown, Space } from "antd";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { IoPeopleOutline } from "react-icons/io5";
 import { HiLocationMarker } from "react-icons/hi";
 import { PiPackage } from "react-icons/pi";
@@ -29,6 +30,11 @@ function getItem(label, key, icon, children) {
 }
 
 const items = [
+  getItem("Homepage", "/", <HomeFilled />),
+  {
+    type: "divider",
+    style: { backgroundColor: "rgba(255, 255, 255, 0.3)", margin: "8px 16px" },
+  },
   getItem("Manage Station", "station", <FaChargingStation size={15} />),
   getItem("Manage User", "user", <IoPeopleOutline size={15} />),
   getItem(
@@ -50,6 +56,11 @@ const Dashboard = () => {
   // const account = useSelector((state) => state.account);
   // const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get current path and extract the selected key
+  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const selectedKey = pathSegments.length > 1 ? pathSegments[1] : "/";
 
   // Define items for the dropdown menu
   const itemsDropdown = [
@@ -86,7 +97,7 @@ const Dashboard = () => {
         <div className="demo-logo-vertical" />
         <Menu
           theme="dark"
-          defaultSelectedKeys={["station"]}
+          selectedKeys={[selectedKey]}
           mode="inline"
           items={items}
         />

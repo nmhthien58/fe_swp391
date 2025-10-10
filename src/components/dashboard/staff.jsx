@@ -6,24 +6,19 @@ import {
   TeamOutlined,
   UserOutlined,
   LogoutOutlined,
-  WarningOutlined, // Added for dropdown menu
+  WarningOutlined,
+  HomeFilled, // Added for dropdown menu
 } from "@ant-design/icons";
 import { Breadcrumb, Layout, Menu, theme, Avatar, Dropdown, Space } from "antd";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { IoPeopleOutline } from "react-icons/io5";
 import { HiLocationMarker } from "react-icons/hi";
 import { PiPackage, PiTrademarkLight } from "react-icons/pi";
 import { BiBattery } from "react-icons/bi";
 import { BsBatteryCharging } from "react-icons/bs";
-import { CgBattery } from "react-icons/cg";
-import {
-  FaBatteryFull,
-  FaChargingStation,
-  FaTruckLoading,
-} from "react-icons/fa";
+
 import { FiBattery } from "react-icons/fi";
-import { SiTradingview } from "react-icons/si";
-import { TbBrandBooking } from "react-icons/tb";
+
 // import { useDispatch, useSelector } from "react-redux"; // Import useSelector to get data from Redux
 // import { logout } from "../../redux/accountSlice";
 
@@ -39,7 +34,12 @@ function getItem(label, key, icon, children) {
 }
 
 const items = [
-  getItem("Manage Stock Batteries", "battery", <FiBattery size={15} />),
+  getItem("Homepage", "/", <HomeFilled />),
+  {
+    type: "divider",
+    style: { backgroundColor: "rgba(255, 255, 255, 0.3)", margin: "8px 16px" },
+  },
+  getItem("Manage Stock Batteries", "stock", <FiBattery size={15} />),
   getItem("Manage Swap Transaction", "swap", <BsBatteryCharging size={15} />),
 ];
 
@@ -53,14 +53,18 @@ const StaffDashboard = () => {
   // const account = useSelector((state) => state.account);
   // const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
 
+  // Get current path and extract the selected key
+  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const selectedKey = pathSegments.length > 1 ? pathSegments[1] : "/";
   // Define items for the dropdown menu
   const itemsDropdown = [
-    {
-      key: "1",
-      label: <Link to="/profile">Profile</Link>, // Example link
-      icon: <UserOutlined />,
-    },
+    // {
+    //   key: "1",
+    //   label: <Link to="/profile">Profile</Link>, // Example link
+    //   icon: <UserOutlined />,
+    // },
     {
       key: "2",
       label: (
@@ -89,7 +93,7 @@ const StaffDashboard = () => {
         <div className="demo-logo-vertical" />
         <Menu
           theme="dark"
-          defaultSelectedKeys={["station"]}
+          selectedKeys={[selectedKey]}
           mode="inline"
           items={items}
         />
