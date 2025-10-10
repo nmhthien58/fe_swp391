@@ -12,6 +12,7 @@ import ManageUser from "./pages/manage-user/index.jsx";
 import ManageBatteryRentPackage from "./pages/manage-batteryrentpackage/index.jsx";
 import Overview from "./pages/overview-page/index.jsx";
 import ManageComplaints from "./pages/complaints/index.jsx";
+import Homepage from "./pages/homepage/index.jsx";
 
 function App() {
   const router = createBrowserRouter([
@@ -55,6 +56,7 @@ function App() {
     },
     {
       path: "/",
+      element: <Homepage />,
     },
   ]);
 
