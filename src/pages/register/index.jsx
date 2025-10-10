@@ -19,8 +19,6 @@ import {
   WomanOutlined,
 } from "@ant-design/icons";
 import api from "../../config/axios";
-// If you're on AntD v5, import the base reset once in your app entry:
-// import "antd/dist/reset.css";
 
 const { Option } = Select;
 
@@ -30,12 +28,12 @@ const RegisterPage = () => {
 
   const validateEmail = (email) =>
     /^(?!.*\.\.)([^\s@]+@[^\s@]+\.[^\s@]{2,4})$/.test(email);
-  const validatePhone = (phone) => /^(02|03|05|07|08|09)\d{8,9}$/.test(phone);
+  // const validatePhone = (phone) => /^(02|03|05|07|08|09)\d{8,9}$/.test(phone);
 
   const onFinish = async (values) => {
     setIsLoading(true);
     try {
-      const response = await api.post("/register", values);
+      const response = await api.post("/api/register", values);
       console.log(response);
       // eslint-disable-next-line no-unused-vars
     } catch (e) {
@@ -98,9 +96,21 @@ const RegisterPage = () => {
                   />
                 </Form.Item>
               </Col>
-
+              <Col span={24}>
+                <Form.Item
+                  label="User name"
+                  name="userName"
+                  rules={[{ required: true, message: "User name is required" }]}
+                >
+                  <Input
+                    placeholder="Username (Use to login)"
+                    prefix={<UserOutlined />}
+                    allowClear
+                  />
+                </Form.Item>
+              </Col>
               {/* Gender */}
-              <Col xs={24} md={12}>
+              {/* <Col>
                 <Form.Item
                   label="Gender"
                   name="gender"
@@ -131,10 +141,10 @@ const RegisterPage = () => {
                     ]}
                   />
                 </Form.Item>
-              </Col>
+              </Col> */}
 
               {/* Phone */}
-              <Col xs={24} md={12}>
+              {/* <Col xs={24} md={24}>
                 <Form.Item
                   label="Phone"
                   name="phone"
@@ -160,7 +170,7 @@ const RegisterPage = () => {
                     allowClear
                   />
                 </Form.Item>
-              </Col>
+              </Col> */}
 
               {/* Email */}
               <Col span={24}>

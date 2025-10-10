@@ -12,23 +12,29 @@ import {
 } from "antd";
 import { MailOutlined, LockOutlined } from "@ant-design/icons";
 import { FaGoogle, FaGithub } from "react-icons/fa";
+import { toast } from "react-toastify";
+import api from "../../config/axios";
+import { useNavigate } from "react-router-dom";
 // If using AntD v5, remember to import base reset once in your app root:
 // import "antd/dist/reset.css";
 
 const LoginPage = () => {
   const [form] = Form.useForm();
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
+  // const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
 
   const onFinish = async (values) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise((r) => setTimeout(r, 1500));
-      console.log("Login successful", values);
-      message.success("Signed in!");
-      // TODO: navigate to dashboard
+      const response = await api.post("/auth/login", values);
+      toast.success("Successfully logged in!");
+      console.log(response);
+      const { token } = response.data;
+      localStorage.setItem("token", token);
+      navigate("/dashboard");
+      // lưu state
       // eslint-disable-next-line no-unused-vars
     } catch (e) {
       message.error("Login failed. Please try again.");
@@ -58,27 +64,8 @@ const LoginPage = () => {
             onFinish={onFinish}
             requiredMark={false}
           >
-            <Form.Item
-              label="Email address"
-              name="email"
-              rules={[
-                { required: true, message: "Email is required" },
-                // eslint-disable-next-line no-unused-vars
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    return !value || validateEmail(value)
-                      ? Promise.resolve()
-                      : Promise.reject(new Error("Please enter a valid email"));
-                  },
-                }),
-              ]}
-            >
-              <Input
-                placeholder="Enter your email"
-                type="email"
-                prefix={<MailOutlined />}
-                allowClear
-              />
+            <Form.Item label="Email address" name="email">
+              <Input placeholder="Enter your email" prefix={<MailOutlined />} />
             </Form.Item>
 
             <Form.Item
@@ -86,7 +73,7 @@ const LoginPage = () => {
               name="password"
               rules={[
                 { required: true, message: "Password is required" },
-                { min: 8, message: "Password must be at least 8 characters" },
+                { min: 4, message: "Password must be at least 8 characters" },
               ]}
               hasFeedback
             >
