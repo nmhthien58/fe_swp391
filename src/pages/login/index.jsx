@@ -10,8 +10,8 @@ import {
   Col,
   message,
 } from "antd";
-import { MailOutlined, LockOutlined } from "@ant-design/icons";
-import { FaGoogle, FaGithub } from "react-icons/fa";
+import { LockOutlined, UserOutlined } from "@ant-design/icons";
+import { FaGoogle } from "react-icons/fa";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
 import { useNavigate } from "react-router-dom";
@@ -64,8 +64,11 @@ const LoginPage = () => {
             onFinish={onFinish}
             requiredMark={false}
           >
-            <Form.Item label="Email address" name="email">
-              <Input placeholder="Enter your email" prefix={<MailOutlined />} />
+            <Form.Item label="Username" name="userName">
+              <Input
+                placeholder="Enter your username"
+                prefix={<UserOutlined />}
+              />
             </Form.Item>
 
             <Form.Item
@@ -73,7 +76,7 @@ const LoginPage = () => {
               name="password"
               rules={[
                 { required: true, message: "Password is required" },
-                { min: 4, message: "Password must be at least 8 characters" },
+                { min: 6, message: "Password must be at least 6 characters" },
               ]}
               hasFeedback
             >
@@ -85,9 +88,9 @@ const LoginPage = () => {
 
             <Row justify="space-between" align="middle">
               <Col>
-                <Form.Item name="rememberMe" valuePropName="checked" noStyle>
+                {/* <Form.Item name="rememberMe" valuePropName="checked" noStyle>
                   <Checkbox>Remember me</Checkbox>
-                </Form.Item>
+                </Form.Item> */}
               </Col>
               <Col>
                 <a href="#" onClick={(e) => e.preventDefault()}>

@@ -35,7 +35,7 @@ const items = [
     "rentpackage",
     <PiPackage size={15} />
   ),
-  getItem("Reports and statistics", "report", <PieChartOutlined size={15} />),
+  getItem("Reports and statistics", "overview", <PieChartOutlined size={15} />),
   getItem("Complaints", "complaints", <WarningOutlined size={15} />),
 ];
 
