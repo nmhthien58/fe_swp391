@@ -1,4 +1,8 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import {
+  createBrowserRouter,
+  Navigate,
+  RouterProvider,
+} from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import LoginPage from "./pages/login/index.jsx";
 import RegisterPage from "./pages/register/index.jsx";
@@ -24,6 +28,10 @@ function App() {
       element: <Dashboard />,
       children: [
         {
+          index: true, // This makes it the default
+          element: <Navigate to="station" replace />,
+        },
+        {
           path: "station",
           element: <ManageStation />,
         },
@@ -44,6 +52,9 @@ function App() {
           element: <ManageComplaints />,
         },
       ],
+    },
+    {
+      path: "/",
     },
   ]);
 

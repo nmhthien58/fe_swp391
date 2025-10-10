@@ -85,7 +85,7 @@ const Dashboard = () => {
         <div className="demo-logo-vertical" />
         <Menu
           theme="dark"
-          defaultSelectedKeys={["1"]}
+          defaultSelectedKeys={["station"]}
           mode="inline"
           items={items}
         />
@@ -126,7 +126,7 @@ const Dashboard = () => {
           </div>
         </Content>
         <Footer style={{ textAlign: "center" }}>
-          Ant Design ©{new Date().getFullYear()} Created by Ant UED
+          EV Battery Swap Station Management System
         </Footer>
       </Layout>
     </Layout>

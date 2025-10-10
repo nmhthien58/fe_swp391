@@ -44,12 +44,12 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center bg-gradient-to-br from-blue-100 to-blue-50 justify-center relative ">
-      {/* Background */}
-      <div className="absolute inset-0 z-0 bg-[url('')]   bg-cover bg-center bg-no-repeat">
-        <div className="absolute inset-0 "></div>
-      </div>
-
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{
+        background: "linear-gradient(135deg, #134e5e 0%, #71b280 100%)",
+      }}
+    >
       <div className="relative z-10 w-full max-w-md mx-4">
         <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
           <div className="text-center mb-4">
