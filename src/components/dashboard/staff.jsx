@@ -7,7 +7,8 @@ import {
   UserOutlined,
   LogoutOutlined,
   WarningOutlined,
-  HomeFilled, // Added for dropdown menu
+  HomeFilled,
+  DollarOutlined, // Added for dropdown menu
 } from "@ant-design/icons";
 import { Breadcrumb, Layout, Menu, theme, Avatar, Dropdown, Space } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -40,7 +41,7 @@ const items = [
     style: { backgroundColor: "rgba(255, 255, 255, 0.3)", margin: "8px 16px" },
   },
   getItem("Manage Stock Batteries", "stock", <FiBattery size={15} />),
-  getItem("Manage Swap Transaction", "swap", <BsBatteryCharging size={15} />),
+  getItem("Manage Swap Transaction", "swap", <DollarOutlined size={15} />),
 ];
 
 const StaffDashboard = () => {
