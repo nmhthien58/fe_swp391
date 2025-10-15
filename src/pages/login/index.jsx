@@ -25,9 +25,34 @@ const LoginPage = () => {
 
   // const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
 
+  // const onFinish = async (values) => {
+  //   setIsLoading(true);
+  //   try {
+  //     const response = await api.post("/auth/login", null, {
+  //       params: {
+  //         userName: values.userName,
+  //         password: values.password,
+  //       },
+  //     });
+
+  //     toast.success("Successfully logged in!");
+  //     console.log(response);
+  //     const { token } = response.data;
+  //     localStorage.setItem("token", token);
+  //     navigate("/dashboard");
+  //     // lưu state
+  //     // eslint-disable-next-line no-unused-vars
+  //   } catch (e) {
+  //     message.error("Login failed. Please try again.");
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
   const onFinish = async (values) => {
     setIsLoading(true);
     try {
+      // Gọi API login đúng theo Swagger
       const response = await api.post("/auth/login", null, {
         params: {
           userName: values.userName,
@@ -35,15 +60,24 @@ const LoginPage = () => {
         },
       });
 
-      toast.success("Successfully logged in!");
-      console.log(response);
-      const { token } = response.data;
+      // Lấy token từ response
+      const token = response?.data?.result?.token;
+
+      if (!token) {
+        message.error("Không nhận được token từ server!");
+        return;
+      }
+
+      // Lưu token vào localStorage
       localStorage.setItem("token", token);
+
+      toast.success("Đăng nhập thành công!");
       navigate("/dashboard");
-      // lưu state
-      // eslint-disable-next-line no-unused-vars
-    } catch (e) {
-      message.error("Login failed. Please try again.");
+    } catch (error) {
+      console.error("Login error:", error);
+      message.error(
+        "Đăng nhập thất bại. Kiểm tra lại tài khoản hoặc mật khẩu."
+      );
     } finally {
       setIsLoading(false);
     }

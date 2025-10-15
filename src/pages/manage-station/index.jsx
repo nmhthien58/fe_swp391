@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from "react";
 import {
   Button,
   Form,
@@ -9,26 +10,26 @@ import {
   Tag,
 } from "antd";
 import { useForm } from "antd/es/form/Form";
-import axios from "axios";
-import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
+import api from "../../config/axios";
+
 const ManageStation = () => {
-  const [categories, setCategories] = useState();
+  const [stations, setStations] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = useForm();
 
-  // columns (hiển thị cột như nào)
-  const colums = [
-    {
-      title: "Name",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "Address",
-      dataIndex: "address",
-      key: "address",
-    },
+  // Phân trang
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+  });
+
+  // Cột bảng
+  const columns = [
+    { title: "Name", dataIndex: "name", key: "name" },
+    { title: "Address", dataIndex: "address", key: "address" },
     {
       title: "Status",
       dataIndex: "status",
@@ -42,192 +43,298 @@ const ManageStation = () => {
         );
       },
     },
-    {
-      title: "Battery capacity",
-      dataIndex: "capacity",
-      key: "capacity",
-    },
+    { title: "Battery capacity", dataIndex: "capacity", key: "capacity" },
+    { title: "Latitude", dataIndex: "latitude", key: "latitude" },
+    { title: "Longitude", dataIndex: "longitude", key: "longitude" },
+    { title: "Image URL", dataIndex: "imageUrl", key: "imageUrl" },
     {
       title: "Action",
-      dataIndex: "id",
-      key: "id",
-      render: (id, record) => {
-        // record: {name, description}
-        return (
-          <>
-            <Button
-              type="primary"
-              onClick={() => {
-                // 1. open modal
-                setOpen(true);
+      key: "action",
+      render: (_, record) => (
+        <>
+          <Button
+            type="primary"
+            onClick={() => {
+              setOpen(true);
+              form.setFieldsValue({
+                stationId: record.stationId, // id BE
+                name: record.name,
+                address: record.address,
+                status: record.status,
+                capacity: record.capacity,
+                latitude: record.latitude,
+                longitude: record.longitude,
+                imageUrl: record.imageUrl,
+              });
+            }}
+            style={{ marginRight: 8 }}
+          >
+            Edit
+          </Button>
 
-                // 2. fill old data => form
-                form.setFieldsValue(record);
-              }}
-            >
-              Edit
-            </Button>
-            <Popconfirm
-              title="Delete station"
-              onConfirm={async () => {
-                // => cho phép delete
-                await axios.delete(
-                  `https://68ce92096dc3f350777f6302.mockapi.io/Category/${id}`
-                );
-
-                fetchCategories(); // cập nhật lại danh sách
-                toast.success("Successfully remove category!");
-              }}
-            >
-              <Button type="primary" danger>
-                Delete
-              </Button>
-            </Popconfirm>
-          </>
-        );
-      },
+          <Popconfirm
+            title="Delete station"
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(record.stationId)}
+          >
+            <Button danger>Delete</Button>
+          </Popconfirm>
+        </>
+      ),
     },
   ];
 
-  const fetchCategories = async () => {
-    // gọi tới api và lấy dữ liệu categories
-    console.log("fetching data from API...");
+  // ======= API calls =======
 
-    // đợi BE trả về dữ liệu
-    const response = await axios.get(
-      "https://68ce92096dc3f350777f6302.mockapi.io/Category"
-    );
+  const fetchStations = async (
+    page = pagination.current,
+    size = pagination.pageSize,
+    sorter
+  ) => {
+    setLoading(true);
+    try {
+      const params = { page: page - 1, size }; // Spring: 0-based
+      if (sorter && sorter.field && sorter.order) {
+        const dir = sorter.order === "ascend" ? "asc" : "desc";
+        params.sort = `${sorter.field},${dir}`;
+      }
 
-    console.log(response.data);
-    setCategories(response.data);
+      // LIST: đúng swagger
+      const res = await api.get("/api/stations", { params });
+      const data = res.data || {};
+      const content = data.content || [];
+      const total = data.totalElements ?? content.length;
+
+      setStations(content);
+      setPagination({
+        current: (data.pageable?.pageNumber ?? 0) + 1,
+        pageSize: data.pageable?.pageSize ?? size,
+        total,
+      });
+    } catch (err) {
+      console.error("Fetch stations error:", err);
+      toast.error("Không tải được danh sách trạm. (cần quyền admin?)");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (stationId) => {
+    try {
+      // DELETE: /api/stations/{stationId}
+      await api.delete(`/api/stations/${stationId}`);
+      toast.success("Đã xóa station!");
+      fetchStations();
+    } catch (err) {
+      console.error("Delete station error:", err);
+      toast.error("Xóa station thất bại.");
+    }
   };
 
   const handleSubmitForm = async (values) => {
-    const { id } = values;
-    let response;
+    // ép kiểu số đúng dạng float/int
+    const payload = {
+      name: values.name?.trim(),
+      address: values.address?.trim(),
+      latitude: parseFloat(values.latitude),
+      longitude: parseFloat(values.longitude),
+      capacity: parseInt(values.capacity, 10),
+      status: values.status, // "ACTIVE" | "INACTIVE"
+      imageUrl: values.imageUrl?.trim() || null,
+    };
 
-    if (id) {
-      // => update
-      response = await axios.put(
-        `https://68ce92096dc3f350777f6302.mockapi.io/Category/${id}`,
-        values
-      );
-    } else {
-      // => create new
-      response = await axios.post(
-        "https://68ce92096dc3f350777f6302.mockapi.io/Category",
-        values
-      );
+    // kiểm tra nhanh để tránh gửi sai kiểu
+    if (
+      Number.isNaN(payload.latitude) ||
+      Number.isNaN(payload.longitude) ||
+      Number.isNaN(payload.capacity)
+    ) {
+      toast.error("Latitude, longitude, hoặc capacity phải là số hợp lệ!");
+      return;
     }
 
-    console.log(response.data);
-    setOpen(false);
-    fetchCategories();
-    form.resetFields();
-    toast.success("Successfully create new category!");
+    try {
+      if (values.stationId) {
+        // Update station
+        await api.put(`/api/stations/${values.stationId}`, payload);
+        toast.success("Cập nhật station thành công!");
+      } else {
+        // Create station
+        await api.post("/api/stations/stations", payload);
+        toast.success("Tạo mới station thành công!");
+      }
+
+      setOpen(false);
+      form.resetFields();
+      fetchStations();
+    } catch (err) {
+      console.error("Upsert station error:", err.response?.data || err);
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Tạo/sửa station thất bại (Bad Request).";
+      toast.error(msg);
+    }
   };
 
-  // khi load trang lên => fetchCategories()
+  // ======= Effects =======
   useEffect(() => {
-    // làm gì khi load trang lên
-    fetchCategories();
+    fetchStations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleTableChange = (pager, _filters, sorter) => {
+    setPagination({
+      ...pagination,
+      current: pager.current,
+      pageSize: pager.pageSize,
+    });
+    fetchStations(pager.current, pager.pageSize, sorter);
+  };
 
   return (
     <>
       <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-800  pb-2">
+        <h2 className="text-3xl font-bold text-gray-800 pb-2">
           Manage Station
         </h2>
       </div>
+
       <Button
         type="primary"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          form.resetFields();
+          setOpen(true);
+        }}
         style={{ marginBottom: 16 }}
       >
         Add station
       </Button>
-      <Table columns={colums} dataSource={categories} />
+
+      <Table
+        columns={columns}
+        dataSource={stations}
+        rowKey={(r) => r.stationId ?? r.id ?? r.key}
+        loading={loading}
+        pagination={pagination}
+        onChange={handleTableChange}
+      />
+
       <Modal
         title="Station Information"
         open={open}
         onCancel={() => setOpen(false)}
         onOk={() => form.submit()}
+        destroyOnClose
       >
         <Form
-          labelCol={{
-            span: 24,
-          }}
+          labelCol={{ span: 24 }}
           form={form}
           onFinish={handleSubmitForm}
+          preserve={false}
         >
           <Form.Item label="ID" name="stationId" hidden>
             <Input />
           </Form.Item>
-          <Form.Item label="latitude" name="latitude" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item label="longtitude" name="longtitude" hidden>
-            <Input />
-          </Form.Item>
+
           <Form.Item
             label="Name"
             name="name"
             rules={[
-              {
-                required: true,
-                message: "Please input your name!",
-              },
-              {
-                min: 3,
-                message: "Name must be at least 3 characters long!",
-              },
+              { required: true, message: "Please input station name!" },
+              { min: 3, message: "Name must be at least 3 characters long!" },
             ]}
           >
             <Input />
           </Form.Item>
+
           <Form.Item
             label="Address"
             name="address"
             rules={[
-              {
-                required: true,
-                message: "Please provide address!",
-              },
-              {
-                max: 200,
-                message: "Address cannot exceed 200 characters!",
-              },
+              { required: true, message: "Please provide address!" },
+              { max: 200, message: "Address cannot exceed 200 characters!" },
             ]}
           >
             <Input.TextArea />
           </Form.Item>
+
           <Form.Item
             label="Status"
             name="status"
-            rules={[
-              {
-                required: true,
-                message: "Please select status!",
-              },
-            ]}
+            rules={[{ required: true, message: "Please select status!" }]}
           >
             <Select placeholder="Select status">
               <Select.Option value="ACTIVE">Active</Select.Option>
               <Select.Option value="INACTIVE">Inactive</Select.Option>
             </Select>
-          </Form.Item>{" "}
+          </Form.Item>
+
           <Form.Item
             label="Battery capacity"
             name="capacity"
             rules={[
+              { required: true, message: "Please input battery capacity!" },
+            ]}
+          >
+            <Input type="number" min={0} />
+          </Form.Item>
+          <Form.Item
+            label="Latitude"
+            name="latitude"
+            rules={[
+              { required: true, message: "Please input latitude!" },
               {
-                required: true,
-                message: "Please input battery capacity!",
+                validator: (_, value) => {
+                  const n = parseFloat(value);
+                  if (Number.isNaN(n))
+                    return Promise.reject("Latitude must be a number");
+                  if (n < -90 || n > 90)
+                    return Promise.reject(
+                      "Latitude must be between -90 and 90"
+                    );
+                  return Promise.resolve();
+                },
               },
             ]}
           >
-            <Input type="number" />
+            <Input placeholder="e.g. 10.7626" />
+          </Form.Item>
+
+          <Form.Item
+            label="Longitude"
+            name="longitude"
+            rules={[
+              { required: true, message: "Please input longitude!" },
+              {
+                validator: (_, value) => {
+                  const n = parseFloat(value);
+                  if (Number.isNaN(n))
+                    return Promise.reject("Longitude must be a number");
+                  if (n < -180 || n > 180)
+                    return Promise.reject(
+                      "Longitude must be between -180 and 180"
+                    );
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Input placeholder="e.g. 106.6602" />
+          </Form.Item>
+
+          <Form.Item
+            label="Image URL"
+            name="imageUrl"
+            rules={[
+              {
+                warningOnly: true,
+                message: "Invalid URL format",
+              },
+            ]}
+          >
+            <Input placeholder="https://example.com/image.jpg" />
           </Form.Item>
         </Form>
       </Modal>
