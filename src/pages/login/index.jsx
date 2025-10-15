@@ -28,7 +28,13 @@ const LoginPage = () => {
   const onFinish = async (values) => {
     setIsLoading(true);
     try {
-      const response = await api.post("/auth/login", values);
+      const response = await api.post("/auth/login", null, {
+        params: {
+          userName: values.userName,
+          password: values.password,
+        },
+      });
+
       toast.success("Successfully logged in!");
       console.log(response);
       const { token } = response.data;
@@ -76,7 +82,7 @@ const LoginPage = () => {
               name="password"
               rules={[
                 { required: true, message: "Password is required" },
-                { min: 6, message: "Password must be at least 6 characters" },
+                { min: 4, message: "Password must be at least 4 characters" },
               ]}
               hasFeedback
             >
