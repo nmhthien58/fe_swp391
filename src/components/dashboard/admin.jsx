@@ -15,6 +15,7 @@ import { IoPeopleOutline } from "react-icons/io5";
 import { HiLocationMarker } from "react-icons/hi";
 import { PiPackage } from "react-icons/pi";
 import { FaChargingStation } from "react-icons/fa";
+import { toast } from "react-toastify";
 // import { useDispatch, useSelector } from "react-redux"; // Import useSelector to get data from Redux
 // import { logout } from "../../redux/accountSlice";
 
@@ -75,7 +76,9 @@ const Dashboard = () => {
         <button
           onClick={() => {
             // dispatch(logout());
+            localStorage.removeItem("token");
             navigate("/");
+            toast.success("Logout thành công");
           }}
         >
           Logout
