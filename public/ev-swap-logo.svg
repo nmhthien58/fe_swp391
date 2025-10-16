@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <defs>
+    <style>
+      .blue { fill: #1E88E5; }
+      .green { fill: #58B947; }
+      .stroke-blue { stroke: #1E88E5; }
+      .stroke-green { stroke: #58B947; }
+    </style>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto-start-reverse">
+      <polygon points="0,0 10,5 0,10" class="blue"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto-start-reverse">
+      <polygon points="0,0 10,5 0,10" class="green"/>
+    </marker>
+  </defs>
+
+  <!-- Circular arrows (stroked arcs) -->
+  <g fill="none" stroke-width="28" stroke-linecap="round">
+    <!-- Blue arc (upper-left to lower-right) -->
+    <path class="stroke-blue" d="M110,206
+             A160,160 0 1,1 402,244" marker-end="url(#arrowBlue)"/>
+    <!-- Green arc (lower-right to lower-left) -->
+    <path class="stroke-green" d="M402,306
+             A160,160 0 1,1 110,270" marker-end="url(#arrowGreen)"/>
+  </g>
+
+  <!-- Battery body -->
+  <g transform="translate(176,132)">
+    <!-- Cap -->
+    <rect x="64" y="-8" rx="6" ry="6" width="32" height="18" fill="#1E88E5"/>
+    <!-- Body -->
+    <rect x="0" y="0" width="160" height="248" rx="20" ry="20" fill="none" stroke="#1E88E5" stroke-width="16"/>
+    <!-- Inner panel -->
+    <rect x="20" y="20" width="120" height="208" rx="12" ry="12" fill="none" stroke="#1E88E5" stroke-width="8"/>
+    <!-- Charge bars -->
+    <rect x="32" y="170" width="96" height="40" rx="8" class="blue"/>
+    <rect x="32" y="118" width="96" height="40" rx="8" class="blue" opacity="0.9"/>
+    <rect x="32" y="66" width="96" height="40" rx="8" class="blue" opacity="0.8"/>
+  </g>
+</svg>
