@@ -16,6 +16,8 @@ import Homepage from "./pages/homepage/index.jsx";
 import StaffDashboard from "./components/dashboard/staff.jsx";
 import ManageStockBattery from "./pages/manage-stockbattery/index.jsx";
 import ManageBatterySwapTransaction from "./pages/manage-batteryswaptransaction/index.jsx";
+import AuthGate from "./components/protected-route/index.jsx";
+
 function App() {
   const router = createBrowserRouter([
     {
@@ -26,51 +28,46 @@ function App() {
       path: "/register",
       element: <RegisterPage />,
     },
+
+    // ✅ Dashboard (ADMIN) được bảo vệ bởi AuthGate
     {
       path: "/dashboard",
-      element: <Dashboard />,
+      element: (
+        <AuthGate>
+          <Dashboard />
+        </AuthGate>
+      ),
       children: [
         {
-          index: true, // This makes it the default
+          index: true,
           element: <Navigate to="station" replace />,
         },
-        {
-          path: "station",
-          element: <ManageStation />,
-        },
-        {
-          path: "user",
-          element: <ManageUser />,
-        },
-        {
-          path: "rentpackage",
-          element: <ManageBatteryRentPackage />,
-        },
-        {
-          path: "overview",
-          element: <Overview />,
-        },
-        {
-          path: "complaints",
-          element: <ManageComplaints />,
-        },
+        { path: "station", element: <ManageStation /> },
+        { path: "user", element: <ManageUser /> },
+        { path: "rentpackage", element: <ManageBatteryRentPackage /> },
+        { path: "overview", element: <Overview /> },
+        { path: "complaints", element: <ManageComplaints /> },
       ],
     },
+
+    // ✅ Staff Dashboard cũng bảo vệ bằng AuthGate
     {
       path: "/staff",
-      element: <StaffDashboard />,
+      element: (
+        <AuthGate>
+          <StaffDashboard />
+        </AuthGate>
+      ),
       children: [
         {
-          index: true, // This makes it the default
+          index: true,
           element: <Navigate to="stock" replace />,
         },
         { path: "stock", element: <ManageStockBattery /> },
-        {
-          path: "swap",
-          element: <ManageBatterySwapTransaction />,
-        },
+        { path: "swap", element: <ManageBatterySwapTransaction /> },
       ],
     },
+
     {
       path: "/",
       element: <Homepage />,

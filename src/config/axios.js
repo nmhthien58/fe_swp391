@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "react-toastify";
 
 const api = axios.create({
   baseURL: "https://ev-battery-swap-station-m-ngement-system.onrender.com/",
@@ -38,10 +39,10 @@ api.interceptors.response.use(
 
       // Tùy tình huống bạn có thể điều hướng:
       // Cách 1: redirect thẳng về login
-      window.location.href = "/login";
+      // window.location.href = "/login";
 
       // Cách 2 (nếu bạn dùng toast):
-      // toast.error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
+      toast.error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
     }
 
     return Promise.reject(error);
