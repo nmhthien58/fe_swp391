@@ -1,173 +1,185 @@
+// src/pages/ManageStockBattery.jsx
+import React, { useEffect, useState } from "react";
 import {
   Button,
+  Checkbox,
   Form,
   Input,
   Modal,
-  Popconfirm,
   Select,
   Table,
   Tag,
+  message,
+  Space,
 } from "antd";
 import { useForm } from "antd/es/form/Form";
-import axios from "axios";
-import React, { useEffect, useState } from "react";
-import { toast } from "react-toastify";
+import {
+  getBatteries,
+  createBatteryAtStation,
+  updateBatteryStatus,
+  BATTERY_STATUS,
+} from "../../services/batteries";
 
-const ManageStockBattery = () => {
-  const [batteries, setBatteries] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [form] = useForm();
-  const [stats, setStats] = useState({
-    full: 0,
-    charging: 0,
-    maintenance: 0,
+const statusStyle = {
+  FULL: { color: "green", text: "Đầy" },
+  EMPTY: { color: "default", text: "Hết" },
+  CHARGING: { color: "blue", text: "Đang sạc" },
+  RESERVED: { color: "default", text: "Đã giữ chỗ" },
+  FULLY_CHARGED: { color: "green", text: "Sạc đầy" },
+  AVAILABLE: { color: "success", text: "Sẵn sàng" },
+  IN_USE: { color: "processing", text: "Đang sử dụng" },
+  MAINTENANCE: { color: "orange", text: "Bảo dưỡng" },
+  DAMAGED: { color: "error", text: "Hỏng" },
+  QUARANTINED: { color: "default", text: "Cách ly" },
+};
+
+export default function ManageStockBattery() {
+  const [formCreate] = useForm();
+  const [formPatch] = useForm();
+
+  const [openCreate, setOpenCreate] = useState(false);
+  const [openPatch, setOpenPatch] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [data, setData] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1); // antd 1-based
+  const [pageSize, setPageSize] = useState(20);
+  const [sorter, setSorter] = useState({
+    field: "serialNumber",
+    order: "ascend",
   });
 
-  // Columns definition
+  // Lưu pin đang chọn để patch
+  const [currentBattery, setCurrentBattery] = useState(null);
+
+  // thống kê nhanh
+  const [stats, setStats] = useState({ FULL: 0, CHARGING: 0, MAINTENANCE: 0 });
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const sort =
+        sorter?.field && sorter?.order
+          ? `${sorter.field},${sorter.order === "ascend" ? "asc" : "desc"}`
+          : "serialNumber,asc";
+
+      const res = await getBatteries({
+        page: page - 1,
+        size: pageSize,
+        sort,
+      });
+
+      const items = res?.content || [];
+      setData(items);
+      setTotal(res?.totalElements ?? items.length);
+
+      const counts = { FULL: 0, CHARGING: 0, MAINTENANCE: 0 };
+      items.forEach((b) => {
+        if (b.status === "FULL") counts.FULL++;
+        if (b.status === "CHARGING") counts.CHARGING++;
+        if (b.status === "MAINTENANCE") counts.MAINTENANCE++;
+      });
+      setStats(counts);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, sorter]);
+
+  // Create battery (POST)
+  const handleCreate = async (values) => {
+    try {
+      await createBatteryAtStation(values.stationId, values.status);
+      message.success("Tạo pin thành công!");
+      setOpenCreate(false);
+      formCreate.resetFields();
+      fetchData();
+    } catch (e) {
+      message.error(e?.response?.data?.message || "Tạo pin thất bại");
+    }
+  };
+
+  // Patch status (PATCH)
+  const handlePatch = async (values) => {
+    try {
+      await updateBatteryStatus(currentBattery.batteryId, values);
+      message.success("Cập nhật trạng thái thành công!");
+      setOpenPatch(false);
+      formPatch.resetFields();
+      setCurrentBattery(null);
+      fetchData();
+    } catch (e) {
+      message.error(e?.response?.data?.message || "Cập nhật thất bại");
+    }
+  };
+
   const columns = [
     {
-      title: "Mã Pin",
-      dataIndex: "code",
-      key: "code",
+      title: "Mã Pin (Serial)",
+      dataIndex: "serialNumber",
+      key: "serialNumber",
+      sorter: true,
+      render: (v) => v || "-",
     },
     {
       title: "Model",
       dataIndex: "model",
       key: "model",
+      sorter: true,
+      render: (v) => v || "-",
     },
     {
-      title: "Dung Lượng (Ah)",
-      dataIndex: "capacity",
-      key: "capacity",
+      title: "Dung lượng (Wh)",
+      dataIndex: "capacityWh",
+      key: "capacityWh",
+      sorter: true,
+      render: (v) => (v ?? v === 0 ? v : "-"),
     },
     {
-      title: "Trạng Thái Pin",
+      title: "Trạng thái",
       dataIndex: "status",
       key: "status",
+      filters: BATTERY_STATUS.map((s) => ({
+        text: statusStyle[s]?.text || s,
+        value: s,
+      })),
+      onFilter: (value, record) => record.status === value,
       render: (status) => {
-        const statusConfig = {
-          FULL: { color: "green", text: "Đầy" },
-          CHARGING: { color: "blue", text: "Đang sạc" },
-          MAINTENANCE: { color: "orange", text: "Bảo dưỡng" },
-        };
-        const config = statusConfig[status] || {
+        const cfg = statusStyle[status] || {
           color: "default",
-          text: status,
+          text: status || "-",
         };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        return <Tag color={cfg.color}>{cfg.text}</Tag>;
       },
     },
     {
-      title: "Tình Trạng",
-      dataIndex: "condition",
-      key: "condition",
-      render: (condition) => {
-        const conditionConfig = {
-          GOOD: { color: "success", text: "Tốt" },
-          FAIR: { color: "warning", text: "Khá" },
-          POOR: { color: "error", text: "Yếu" },
-        };
-        const config = conditionConfig[condition] || {
-          color: "default",
-          text: condition,
-        };
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
-    },
-    {
-      title: "Trạm",
-      dataIndex: "station",
-      key: "station",
-    },
-    {
-      title: "Thao Tác",
-      dataIndex: "id",
-      key: "id",
-      render: (id, record) => {
-        return (
-          <>
-            <Button
-              type="primary"
-              onClick={() => {
-                setOpen(true);
-                form.setFieldsValue(record);
-              }}
-            >
-              Edit
-            </Button>
-            <Popconfirm
-              title="Xóa pin"
-              description="Bạn có chắc muốn xóa pin này?"
-              onConfirm={async () => {
-                await axios.delete(
-                  `https://68ce92096dc3f350777f6302.mockapi.io/Category/${id}`
-                );
-                fetchBatteries();
-                toast.success("Xóa pin thành công!");
-              }}
-            >
-              <Button type="primary" danger>
-                Delete
-              </Button>
-            </Popconfirm>
-          </>
-        );
-      },
+      title: "Thao tác",
+      key: "actions",
+      render: (_, record) => (
+        <Space>
+          <Button
+            type="primary"
+            onClick={() => {
+              setCurrentBattery(record);
+              setOpenPatch(true);
+              formPatch.setFieldsValue({
+                status: record.status,
+                reason: "",
+                adminOverride: true,
+              });
+            }}
+          >
+            Cập nhật
+          </Button>
+        </Space>
+      ),
     },
   ];
-
-  const fetchBatteries = async () => {
-    console.log("Fetching battery data from API...");
-    const response = await axios.get(
-      "https://68ce92096dc3f350777f6302.mockapi.io/Category"
-    );
-    console.log(response.data);
-    setBatteries(response.data);
-
-    // Calculate statistics
-    const fullCount = response.data.filter((b) => b.status === "FULL").length;
-    const chargingCount = response.data.filter(
-      (b) => b.status === "CHARGING"
-    ).length;
-    const maintenanceCount = response.data.filter(
-      (b) => b.status === "MAINTENANCE"
-    ).length;
-
-    setStats({
-      full: fullCount,
-      charging: chargingCount,
-      maintenance: maintenanceCount,
-    });
-  };
-
-  const handleSubmitForm = async (values) => {
-    const { id } = values;
-    let response;
-
-    if (id) {
-      // Update existing battery
-      response = await axios.put(
-        `https://68ce92096dc3f350777f6302.mockapi.io/Category/${id}`,
-        values
-      );
-    } else {
-      // Create new battery
-      response = await axios.post(
-        "https://68ce92096dc3f350777f6302.mockapi.io/Category",
-        values
-      );
-    }
-
-    console.log(response.data);
-    setOpen(false);
-    fetchBatteries();
-    form.resetFields();
-    toast.success("Thành công!");
-  };
-
-  useEffect(() => {
-    fetchBatteries();
-  }, []);
 
   return (
     <>
@@ -177,184 +189,155 @@ const ManageStockBattery = () => {
         </h2>
       </div>
 
-      {/* Statistics Cards */}
-      <div style={{ display: "flex", gap: "16px", marginBottom: "24px" }}>
+      {/* Thống kê nhanh */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
         <div
           style={{
             flex: 1,
-            padding: "20px",
-            backgroundColor: "#f0f9ff",
-            borderRadius: "8px",
+            padding: 20,
+            background: "#f0f9ff",
+            borderRadius: 8,
             border: "1px solid #bae6fd",
           }}
         >
-          <div
-            style={{ fontSize: "14px", color: "#0369a1", marginBottom: "8px" }}
-          >
+          <div style={{ fontSize: 14, color: "#0369a1", marginBottom: 8 }}>
             Pin Đầy
           </div>
-          <div
-            style={{ fontSize: "32px", fontWeight: "bold", color: "#0284c7" }}
-          >
-            {stats.full}
+          <div style={{ fontSize: 32, fontWeight: "bold", color: "#0284c7" }}>
+            {stats.FULL}
           </div>
         </div>
-
         <div
           style={{
             flex: 1,
-            padding: "20px",
-            backgroundColor: "#eff6ff",
-            borderRadius: "8px",
+            padding: 20,
+            background: "#eff6ff",
+            borderRadius: 8,
             border: "1px solid #bfdbfe",
           }}
         >
-          <div
-            style={{ fontSize: "14px", color: "#1e40af", marginBottom: "8px" }}
-          >
+          <div style={{ fontSize: 14, color: "#1e40af", marginBottom: 8 }}>
             Pin Đang Sạc
           </div>
-          <div
-            style={{ fontSize: "32px", fontWeight: "bold", color: "#2563eb" }}
-          >
-            {stats.charging}
+          <div style={{ fontSize: 32, fontWeight: "bold", color: "#2563eb" }}>
+            {stats.CHARGING}
           </div>
         </div>
-
         <div
           style={{
             flex: 1,
-            padding: "20px",
-            backgroundColor: "#fff7ed",
-            borderRadius: "8px",
+            padding: 20,
+            background: "#fff7ed",
+            borderRadius: 8,
             border: "1px solid #fed7aa",
           }}
         >
-          <div
-            style={{ fontSize: "14px", color: "#c2410c", marginBottom: "8px" }}
-          >
+          <div style={{ fontSize: 14, color: "#c2410c", marginBottom: 8 }}>
             Pin Bảo Dưỡng
           </div>
-          <div
-            style={{ fontSize: "32px", fontWeight: "bold", color: "#ea580c" }}
-          >
-            {stats.maintenance}
+          <div style={{ fontSize: 32, fontWeight: "bold", color: "#ea580c" }}>
+            {stats.MAINTENANCE}
           </div>
         </div>
       </div>
 
-      <Button
-        type="primary"
-        onClick={() => setOpen(true)}
-        style={{ marginBottom: 16 }}
-      >
-        Thêm pin mới
-      </Button>
-      <Table columns={columns} dataSource={batteries} />
+      <Space style={{ marginBottom: 16 }}>
+        <Button type="primary" onClick={() => setOpenCreate(true)}>
+          Thêm pin mới
+        </Button>
+      </Space>
+
+      <Table
+        rowKey={(r) => String(r.batteryId)}
+        loading={loading}
+        dataSource={data}
+        columns={columns}
+        onChange={(pagination, _filters, sorterArg) => {
+          if (!Array.isArray(sorterArg)) {
+            setSorter({
+              field: sorterArg.field || "serialNumber",
+              order: sorterArg.order || "ascend",
+            });
+          }
+          setPage(pagination.current);
+          setPageSize(pagination.pageSize);
+        }}
+        pagination={{ current: page, pageSize, total, showSizeChanger: true }}
+      />
+
+      {/* Modal CREATE */}
       <Modal
-        title="Thông Tin Pin"
-        open={open}
-        onCancel={() => setOpen(false)}
-        onOk={() => form.submit()}
+        title="Thêm Pin Mới"
+        open={openCreate}
+        onCancel={() => setOpenCreate(false)}
+        onOk={() => formCreate.submit()}
       >
-        <Form
-          labelCol={{
-            span: 24,
-          }}
-          form={form}
-          onFinish={handleSubmitForm}
-        >
-          <Form.Item label="ID" name="id" hidden>
-            <Input />
-          </Form.Item>
+        <Form form={formCreate} layout="vertical" onFinish={handleCreate}>
           <Form.Item
-            label="Mã Pin"
-            name="code"
-            rules={[
-              {
-                required: true,
-                message: "Vui lòng nhập mã pin!",
-              },
-              {
-                min: 3,
-                message: "Mã pin phải có ít nhất 3 ký tự!",
-              },
-            ]}
+            label="Station ID"
+            name="stationId"
+            rules={[{ required: true, message: "Vui lòng nhập Station ID" }]}
           >
-            <Input placeholder="VD: BAT001" />
+            <Input type="number" placeholder="VD: 1" />
           </Form.Item>
           <Form.Item
-            label="Model"
-            name="model"
-            rules={[
-              {
-                required: true,
-                message: "Vui lòng nhập model!",
-              },
-            ]}
-          >
-            <Input placeholder="VD: Li-ion 48V" />
-          </Form.Item>
-          <Form.Item
-            label="Dung Lượng (Ah)"
-            name="capacity"
-            rules={[
-              {
-                required: true,
-                message: "Vui lòng nhập dung lượng!",
-              },
-            ]}
-          >
-            <Input type="number" placeholder="VD: 20" />
-          </Form.Item>
-          <Form.Item
-            label="Trạng Thái Pin"
+            label="Status"
             name="status"
-            rules={[
-              {
-                required: true,
-                message: "Vui lòng chọn trạng thái!",
-              },
-            ]}
+            rules={[{ required: true, message: "Vui lòng chọn Status" }]}
           >
-            <Select placeholder="Chọn trạng thái">
-              <Select.Option value="FULL">Đầy</Select.Option>
-              <Select.Option value="CHARGING">Đang sạc</Select.Option>
-              <Select.Option value="MAINTENANCE">Bảo dưỡng</Select.Option>
+            <Select placeholder="Chọn status">
+              {BATTERY_STATUS.map((s) => (
+                <Select.Option key={s} value={s}>
+                  {statusStyle[s]?.text || s}
+                </Select.Option>
+              ))}
             </Select>
           </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Modal PATCH STATUS */}
+      <Modal
+        title={
+          currentBattery
+            ? `Đổi trạng thái: ${currentBattery.serialNumber}`
+            : "Đổi trạng thái pin"
+        }
+        open={openPatch}
+        onCancel={() => {
+          setOpenPatch(false);
+          setCurrentBattery(null);
+        }}
+        onOk={() => formPatch.submit()}
+      >
+        <Form form={formPatch} layout="vertical" onFinish={handlePatch}>
           <Form.Item
-            label="Tình Trạng"
-            name="condition"
-            rules={[
-              {
-                required: true,
-                message: "Vui lòng chọn tình trạng!",
-              },
-            ]}
+            label="Trạng thái mới"
+            name="status"
+            rules={[{ required: true, message: "Chọn trạng thái" }]}
           >
-            <Select placeholder="Chọn tình trạng">
-              <Select.Option value="GOOD">Tốt</Select.Option>
-              <Select.Option value="FAIR">Khá</Select.Option>
-              <Select.Option value="POOR">Yếu</Select.Option>
+            <Select placeholder="Chọn status">
+              {BATTERY_STATUS.map((s) => (
+                <Select.Option key={s} value={s}>
+                  {statusStyle[s]?.text || s}
+                </Select.Option>
+              ))}
             </Select>
           </Form.Item>
+
+          <Form.Item label="Lý do (tuỳ chọn)" name="reason">
+            <Input.TextArea placeholder="Nhập lý do thay đổi..." rows={3} />
+          </Form.Item>
+
           <Form.Item
-            label="Trạm"
-            name="station"
-            rules={[
-              {
-                required: true,
-                message: "Vui lòng nhập tên trạm!",
-              },
-            ]}
+            name="adminOverride"
+            valuePropName="checked"
+            initialValue={true}
           >
-            <Input placeholder="VD: Trạm Quận 1" />
+            <Checkbox>Admin override</Checkbox>
           </Form.Item>
         </Form>
       </Modal>
     </>
   );
-};
-
-export default ManageStockBattery;
+}
