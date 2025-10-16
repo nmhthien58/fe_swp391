@@ -47,7 +47,7 @@ const RegisterPage = () => {
     <div
       className="min-h-screen flex items-center justify-center"
       style={{
-        background: "linear-gradient(135deg, #134e5e 0%, #71b280 100%)",
+        background: "linear-gradient(135deg, #ffffffff 0%, #e2e1e1ff 100%)",
       }}
     >
       <div className="relative z-10 w-full max-w-xl mx-4">
