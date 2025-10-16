@@ -2,12 +2,12 @@ import React, { useState } from "react";
 import {
   Form,
   Input,
-  Checkbox,
   Button,
   Card,
   Divider,
   Row,
   Col,
+  Spin,
   message,
 } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
@@ -15,44 +15,16 @@ import { FaGoogle } from "react-icons/fa";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
 import { useNavigate } from "react-router-dom";
-// If using AntD v5, remember to import base reset once in your app root:
-// import "antd/dist/reset.css";
 
 const LoginPage = () => {
   const [form] = Form.useForm();
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  // const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
-
-  // const onFinish = async (values) => {
-  //   setIsLoading(true);
-  //   try {
-  //     const response = await api.post("/auth/login", null, {
-  //       params: {
-  //         userName: values.userName,
-  //         password: values.password,
-  //       },
-  //     });
-
-  //     toast.success("Successfully logged in!");
-  //     console.log(response);
-  //     const { token } = response.data;
-  //     localStorage.setItem("token", token);
-  //     navigate("/dashboard");
-  //     // lưu state
-  //     // eslint-disable-next-line no-unused-vars
-  //   } catch (e) {
-  //     message.error("Login failed. Please try again.");
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
   const onFinish = async (values) => {
     setIsLoading(true);
     try {
-      // Gọi API login đúng theo Swagger
+      // 🔹 Gọi API login
       const response = await api.post("/auth/login", null, {
         params: {
           userName: values.userName,
@@ -60,24 +32,36 @@ const LoginPage = () => {
         },
       });
 
-      // Lấy token từ response
+      // 🔹 Lấy token
       const token = response?.data?.result?.token;
-
       if (!token) {
-        message.error("Không nhận được token từ server!");
+        toast.error("Không nhận được token từ server!");
         return;
       }
 
-      // Lưu token vào localStorage
+      // 🔹 Lưu token
       localStorage.setItem("token", token);
-
       toast.success("Đăng nhập thành công!");
-      navigate("/dashboard");
+
+      // 🔹 Kiểm tra quyền hoặc token hợp lệ
+      try {
+        const res = await api.get("/api/getDrivers");
+        if (res.status === 200) {
+          navigate("/dashboard");
+        } else {
+          navigate("/");
+        }
+      } catch (error) {
+        console.warn("Kiểm tra quyền thất bại:", error);
+        navigate("/");
+      }
     } catch (error) {
       console.error("Login error:", error);
-      message.error(
-        "Đăng nhập thất bại. Kiểm tra lại tài khoản hoặc mật khẩu."
-      );
+      if (error.response?.status === 401) {
+        toast.error("Sai tài khoản hoặc mật khẩu!");
+      } else {
+        toast.error("Đăng nhập thất bại. Vui lòng thử lại sau.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -88,8 +72,29 @@ const LoginPage = () => {
       className="min-h-screen flex items-center justify-center"
       style={{
         background: "linear-gradient(135deg, #ffffffff 0%, #e2e1e1ff 100%)",
+        position: "relative",
       }}
     >
+      {/* 🔹 Overlay loading toàn trang */}
+      {isLoading && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(255,255,255,0.7)",
+            zIndex: 9999,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Spin size="large" tip="Đang đăng nhập..." />
+        </div>
+      )}
+
       <div className="relative z-10 w-full max-w-md mx-4">
         <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
           <div className="text-center mb-4">
@@ -100,11 +105,14 @@ const LoginPage = () => {
           <Form
             form={form}
             layout="vertical"
-            initialValues={{ rememberMe: false }}
             onFinish={onFinish}
             requiredMark={false}
           >
-            <Form.Item label="Username" name="userName">
+            <Form.Item
+              label="Username"
+              name="userName"
+              rules={[{ required: true, message: "Username is required" }]}
+            >
               <Input
                 placeholder="Enter your username"
                 prefix={<UserOutlined />}
@@ -118,7 +126,6 @@ const LoginPage = () => {
                 { required: true, message: "Password is required" },
                 { min: 4, message: "Password must be at least 4 characters" },
               ]}
-              hasFeedback
             >
               <Input.Password
                 placeholder="Enter password"
@@ -128,11 +135,6 @@ const LoginPage = () => {
 
             <Row justify="space-between" align="middle">
               <Col>
-                {/* <Form.Item name="rememberMe" valuePropName="checked" noStyle>
-                  <Checkbox>Remember me</Checkbox>
-                </Form.Item> */}
-              </Col>
-              <Col>
                 <a href="#" onClick={(e) => e.preventDefault()}>
                   Forgot your password?
                 </a>
@@ -140,14 +142,8 @@ const LoginPage = () => {
             </Row>
 
             <Form.Item style={{ marginTop: 8 }}>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={isLoading}
-                block
-                size="large"
-              >
-                {isLoading ? "Signing in..." : "Sign in"}
+              <Button type="primary" htmlType="submit" block size="large">
+                Sign in
               </Button>
             </Form.Item>
 

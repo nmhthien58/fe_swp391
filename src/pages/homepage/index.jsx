@@ -67,8 +67,6 @@ const Homepage = () => {
               Nút tạm để test nha
               <Button href="/dashboard">Admin Page</Button>
               <Button href="/staff">Staff Page</Button>
-              <Button href="/login">Login</Button>
-              <Button href="/register">Register</Button>
             </Space>
           </Col>
           <Col>
@@ -86,8 +84,12 @@ const Homepage = () => {
           </Col>
           <Col>
             <Space align="center">
-              <Avatar icon={<UserOutlined />} />
-              <Text>User name</Text>
+              {/* <Avatar icon={<UserOutlined />} />
+              <Text>User name</Text> */}
+              <Button type="primary" href="/login">
+                Login
+              </Button>
+              <Button href="/register">Register</Button>
             </Space>
           </Col>
         </Row>

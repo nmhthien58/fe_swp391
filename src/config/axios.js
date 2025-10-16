@@ -5,7 +5,7 @@ const api = axios.create({
   baseURL: "https://ev-battery-swap-station-m-ngement-system.onrender.com/",
 });
 
-// Các URL public (không cần token)
+// Các URL public (không cần token & không xử lý lỗi 401)
 const publicUrls = ["/auth/login", "/auth/register"];
 
 // Request Interceptor
@@ -20,29 +20,22 @@ api.interceptors.request.use(
 
     return config;
   },
-  (error) => {
-    console.error("Request error:", error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Response Interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Nếu server trả về 401 (Unauthorized)
-    if (error?.response?.status === 401) {
+    const status = error?.response?.status;
+    const url = error?.config?.url || "";
+
+    // 🔹 BỎ QUA toast 401 nếu API nằm trong publicUrls
+    if (status === 401 && !publicUrls.some((pub) => url.includes(pub))) {
       console.warn("Token hết hạn hoặc không hợp lệ. Đăng xuất...");
-
-      // Xóa token khỏi localStorage
       localStorage.removeItem("token");
-
-      // Tùy tình huống bạn có thể điều hướng:
-      // Cách 1: redirect thẳng về login
-      // window.location.href = "/login";
-
-      // Cách 2 (nếu bạn dùng toast):
       toast.error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
+      // window.location.href = "/login"; // tuỳ chọn redirect
     }
 
     return Promise.reject(error);
