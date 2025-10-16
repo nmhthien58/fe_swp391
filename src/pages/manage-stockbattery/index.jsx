@@ -22,15 +22,13 @@ import {
 
 const statusStyle = {
   FULL: { color: "green", text: "Đầy" },
-  EMPTY: { color: "default", text: "Hết" },
+  EMPTY: { color: "red", text: "Hết" },
   CHARGING: { color: "blue", text: "Đang sạc" },
-  RESERVED: { color: "default", text: "Đã giữ chỗ" },
+  RESERVED: { color: "black", text: "Đã giữ chỗ" },
   FULLY_CHARGED: { color: "green", text: "Sạc đầy" },
-  AVAILABLE: { color: "success", text: "Sẵn sàng" },
-  IN_USE: { color: "processing", text: "Đang sử dụng" },
+  IN_USE: { color: "purple", text: "Đang sử dụng" },
   MAINTENANCE: { color: "orange", text: "Bảo dưỡng" },
   DAMAGED: { color: "error", text: "Hỏng" },
-  QUARANTINED: { color: "default", text: "Cách ly" },
 };
 
 export default function ManageStockBattery() {
@@ -54,8 +52,13 @@ export default function ManageStockBattery() {
   const [currentBattery, setCurrentBattery] = useState(null);
 
   // thống kê nhanh
-  const [stats, setStats] = useState({ FULL: 0, CHARGING: 0, MAINTENANCE: 0 });
-
+  const [stats, setStats] = useState({
+    FULL: 0,
+    CHARGING: 0,
+    MAINTENANCE: 0,
+    IN_USE: 0,
+    EMPTY: 0,
+  });
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -74,12 +77,36 @@ export default function ManageStockBattery() {
       setData(items);
       setTotal(res?.totalElements ?? items.length);
 
-      const counts = { FULL: 0, CHARGING: 0, MAINTENANCE: 0 };
+      const counts = {
+        FULL: 0,
+        CHARGING: 0,
+        MAINTENANCE: 0,
+        IN_USE: 0,
+        EMPTY: 0,
+      };
+
       items.forEach((b) => {
-        if (b.status === "FULL") counts.FULL++;
-        if (b.status === "CHARGING") counts.CHARGING++;
-        if (b.status === "MAINTENANCE") counts.MAINTENANCE++;
+        switch (b.status) {
+          case "FULL":
+            counts.FULL++;
+            break;
+          case "CHARGING":
+            counts.CHARGING++;
+            break;
+          case "MAINTENANCE":
+            counts.MAINTENANCE++;
+            break;
+          case "IN_USE":
+            counts.IN_USE++;
+            break;
+          case "EMPTY":
+            counts.EMPTY++;
+            break;
+          default:
+            break;
+        }
       });
+
       setStats(counts);
     } finally {
       setLoading(false);
@@ -191,22 +218,25 @@ export default function ManageStockBattery() {
 
       {/* Thống kê nhanh */}
       <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
+        {/* Pin Đầy - xanh lá */}
         <div
           style={{
             flex: 1,
             padding: 20,
-            background: "#f0f9ff",
+            background: "#ecfdf5",
             borderRadius: 8,
-            border: "1px solid #bae6fd",
+            border: "1px solid #a7f3d0",
           }}
         >
-          <div style={{ fontSize: 14, color: "#0369a1", marginBottom: 8 }}>
+          <div style={{ fontSize: 14, color: "#047857", marginBottom: 8 }}>
             Pin Đầy
           </div>
-          <div style={{ fontSize: 32, fontWeight: "bold", color: "#0284c7" }}>
-            {stats.FULL}
+          <div style={{ fontSize: 32, fontWeight: "bold", color: "#10b981" }}>
+            {stats.FULL ?? 0}
           </div>
         </div>
+
+        {/* Pin Đang Sạc - xanh lam nhạt như cũ */}
         <div
           style={{
             flex: 1,
@@ -220,9 +250,11 @@ export default function ManageStockBattery() {
             Pin Đang Sạc
           </div>
           <div style={{ fontSize: 32, fontWeight: "bold", color: "#2563eb" }}>
-            {stats.CHARGING}
+            {stats.CHARGING ?? 0}
           </div>
         </div>
+
+        {/* Pin Bảo Dưỡng - cam như cũ */}
         <div
           style={{
             flex: 1,
@@ -236,7 +268,43 @@ export default function ManageStockBattery() {
             Pin Bảo Dưỡng
           </div>
           <div style={{ fontSize: 32, fontWeight: "bold", color: "#ea580c" }}>
-            {stats.MAINTENANCE}
+            {stats.MAINTENANCE ?? 0}
+          </div>
+        </div>
+
+        {/* Pin Đang Sử Dụng - tím */}
+        <div
+          style={{
+            flex: 1,
+            padding: 20,
+            background: "#f5f3ff",
+            borderRadius: 8,
+            border: "1px solid #ddd6fe",
+          }}
+        >
+          <div style={{ fontSize: 14, color: "#5b21b6", marginBottom: 8 }}>
+            Pin Đang Sử Dụng
+          </div>
+          <div style={{ fontSize: 32, fontWeight: "bold", color: "#7c3aed" }}>
+            {stats.IN_USE ?? 0}
+          </div>
+        </div>
+
+        {/* Pin Hết - đỏ */}
+        <div
+          style={{
+            flex: 1,
+            padding: 20,
+            background: "#fef2f2",
+            borderRadius: 8,
+            border: "1px solid #fecaca",
+          }}
+        >
+          <div style={{ fontSize: 14, color: "#b91c1c", marginBottom: 8 }}>
+            Pin Hết
+          </div>
+          <div style={{ fontSize: 32, fontWeight: "bold", color: "#ef4444" }}>
+            {stats.EMPTY ?? 0 /* hoặc đổi thành stats.DEPLETED tùy BE */}
           </div>
         </div>
       </div>

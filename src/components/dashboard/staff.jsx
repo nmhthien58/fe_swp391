@@ -35,13 +35,13 @@ function getItem(label, key, icon, children) {
 }
 
 const items = [
-  getItem("Homepage", "/", <HomeFilled />),
+  getItem("Trang chủ", "/", <HomeFilled />),
   {
     type: "divider",
     style: { backgroundColor: "rgba(255, 255, 255, 0.3)", margin: "8px 16px" },
   },
-  getItem("Manage Stock Batteries", "stock", <FiBattery size={15} />),
-  getItem("Manage Swap Transaction", "swap", <DollarOutlined size={15} />),
+  getItem("Quản lý pin tồn kho", "stock", <FiBattery size={15} />),
+  getItem("Quản lý giao dịch", "swap", <DollarOutlined size={15} />),
 ];
 
 const StaffDashboard = () => {

@@ -8,12 +8,9 @@ export const BATTERY_STATUS = [
   "EMPTY",
   "CHARGING",
   "RESERVED",
-  "FULLY_CHARGED",
-  "AVAILABLE",
   "IN_USE",
   "MAINTENANCE",
   "DAMAGED",
-  "QUARANTINED",
 ];
 
 // GET /api/batteries

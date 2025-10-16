@@ -8,6 +8,7 @@ import {
   Select,
   Table,
   Tag,
+  Empty,
 } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { toast } from "react-toastify";
@@ -16,8 +17,13 @@ import api from "../../config/axios";
 const ManageStation = () => {
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [open, setOpen] = useState(false);
   const [form] = useForm();
+
+  // Batteries modal
+  const [batteriesOpen, setBatteriesOpen] = useState(false);
+  const [selectedBatteries, setSelectedBatteries] = useState([]);
 
   // Phân trang
   const [pagination, setPagination] = useState({
@@ -26,7 +32,53 @@ const ManageStation = () => {
     total: 0,
   });
 
-  // Cột bảng
+  // Cột bảng batteries
+  const batteryCols = [
+    { title: "ID", dataIndex: "batteryId", key: "batteryId", width: 90 },
+    { title: "Serial", dataIndex: "serialNumber", key: "serialNumber" },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (status) => {
+        const map = {
+          FULL: "green",
+          CHARGING: "blue",
+          DAMAGED: "error",
+          UNKNOWN: "default",
+          AVAILABLE: "green",
+          MAINTENANCE: "orange",
+          IN_USE: "purple",
+          EMPTY: "red",
+          RESERVED: "black",
+        };
+        return <Tag color={map[status] || "default"}>{status}</Tag>;
+      },
+    },
+    {
+      title: "Capacity (Wh)",
+      dataIndex: "capacityWh",
+      key: "capacityWh",
+      width: 130,
+    },
+    {
+      title: "Model",
+      dataIndex: "model",
+      key: "model",
+      render: (v) => v || "-",
+    },
+    {
+      title: "Driver Sub.",
+      dataIndex: ["driverSubscription", "driverId"],
+      key: "driverSubscription",
+      render: (_, record) =>
+        record?.driverSubscription
+          ? JSON.stringify(record.driverSubscription)
+          : "-",
+    },
+  ];
+
+  // Cột bảng station
   const columns = [
     { title: "Name", dataIndex: "name", key: "name" },
     { title: "Address", dataIndex: "address", key: "address" },
@@ -44,8 +96,6 @@ const ManageStation = () => {
       },
     },
     { title: "Battery capacity", dataIndex: "capacity", key: "capacity" },
-    { title: "Latitude", dataIndex: "latitude", key: "latitude" },
-    { title: "Longitude", dataIndex: "longitude", key: "longitude" },
     { title: "Image URL", dataIndex: "imageUrl", key: "imageUrl" },
     {
       title: "Action",
@@ -53,11 +103,24 @@ const ManageStation = () => {
       render: (_, record) => (
         <>
           <Button
+            onClick={() => {
+              const list = Array.isArray(record.batteries)
+                ? record.batteries
+                : [];
+              setSelectedBatteries(list);
+              setBatteriesOpen(true);
+            }}
+            style={{ marginRight: 8 }}
+          >
+            Batteries
+          </Button>
+
+          <Button
             type="primary"
             onClick={() => {
               setOpen(true);
               form.setFieldsValue({
-                stationId: record.stationId, // id BE
+                stationId: record.stationId,
                 name: record.name,
                 address: record.address,
                 status: record.status,
@@ -86,7 +149,6 @@ const ManageStation = () => {
   ];
 
   // ======= API calls =======
-
   const fetchStations = async (
     page = pagination.current,
     size = pagination.pageSize,
@@ -94,13 +156,12 @@ const ManageStation = () => {
   ) => {
     setLoading(true);
     try {
-      const params = { page: page - 1, size }; // Spring: 0-based
+      const params = { page: page - 1, size };
       if (sorter && sorter.field && sorter.order) {
         const dir = sorter.order === "ascend" ? "asc" : "desc";
         params.sort = `${sorter.field},${dir}`;
       }
 
-      // LIST: đúng swagger
       const res = await api.get("/api/stations", { params });
       const data = res.data || {};
       const content = data.content || [];
@@ -122,7 +183,6 @@ const ManageStation = () => {
 
   const handleDelete = async (stationId) => {
     try {
-      // DELETE: /api/stations/{stationId}
       await api.delete(`/api/stations/${stationId}`);
       toast.success("Đã xóa station!");
       fetchStations();
@@ -133,18 +193,16 @@ const ManageStation = () => {
   };
 
   const handleSubmitForm = async (values) => {
-    // ép kiểu số đúng dạng float/int
     const payload = {
       name: values.name?.trim(),
       address: values.address?.trim(),
       latitude: parseFloat(values.latitude),
       longitude: parseFloat(values.longitude),
       capacity: parseInt(values.capacity, 10),
-      status: values.status, // "ACTIVE" | "INACTIVE"
+      status: values.status,
       imageUrl: values.imageUrl?.trim() || null,
     };
 
-    // kiểm tra nhanh để tránh gửi sai kiểu
     if (
       Number.isNaN(payload.latitude) ||
       Number.isNaN(payload.longitude) ||
@@ -156,15 +214,12 @@ const ManageStation = () => {
 
     try {
       if (values.stationId) {
-        // Update station
         await api.put(`/api/stations/${values.stationId}`, payload);
         toast.success("Cập nhật station thành công!");
       } else {
-        // Create station
         await api.post("/api/stations/stations", payload);
         toast.success("Tạo mới station thành công!");
       }
-
       setOpen(false);
       form.resetFields();
       fetchStations();
@@ -221,6 +276,7 @@ const ManageStation = () => {
         onChange={handleTableChange}
       />
 
+      {/* Modal tạo/sửa station */}
       <Modal
         title="Station Information"
         open={open}
@@ -280,6 +336,7 @@ const ManageStation = () => {
           >
             <Input type="number" min={0} />
           </Form.Item>
+
           <Form.Item
             label="Latitude"
             name="latitude"
@@ -327,16 +384,31 @@ const ManageStation = () => {
           <Form.Item
             label="Image URL"
             name="imageUrl"
-            rules={[
-              {
-                warningOnly: true,
-                message: "Invalid URL format",
-              },
-            ]}
+            rules={[{ warningOnly: true, message: "Invalid URL format" }]}
           >
             <Input placeholder="https://example.com/image.jpg" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Modal hiển thị danh sách batteries */}
+      <Modal
+        title="Batteries of Station"
+        open={batteriesOpen}
+        onCancel={() => setBatteriesOpen(false)}
+        footer={null}
+        width={900}
+      >
+        {selectedBatteries?.length ? (
+          <Table
+            columns={batteryCols}
+            dataSource={selectedBatteries}
+            rowKey={(r) => r.batteryId ?? r.id}
+            pagination={{ pageSize: 8 }}
+          />
+        ) : (
+          <Empty description="Không có battery nào cho station này" />
+        )}
       </Modal>
     </>
   );
