@@ -42,3 +42,14 @@ export async function updateBatteryStatus(batteryId, payload) {
   const res = await api.patch(`/api/batteries/${batteryId}/status`, payload);
   return res.data; // battery sau khi cập nhật
 }
+
+// GET /api/batteries/station/{stationId}
+export async function getBatteriesByStationId(stationId, status) {
+  if (!stationId) throw new Error("stationId is required");
+
+  const params = {};
+  if (status) params.status = status;
+
+  const res = await api.get(`/api/batteries/station/${stationId}`, { params });
+  return res.data; // Trả về danh sách pin tại trạm
+}

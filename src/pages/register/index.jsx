@@ -1,43 +1,54 @@
+// src/pages/RegisterPage.jsx
 import React, { useState } from "react";
-import {
-  Form,
-  Input,
-  Select,
-  Checkbox,
-  Button,
-  Card,
-  Row,
-  Col,
-  message,
-} from "antd";
-import {
-  UserOutlined,
-  MailOutlined,
-  PhoneOutlined,
-  LockOutlined,
-  ManOutlined,
-  WomanOutlined,
-} from "@ant-design/icons";
+import { Form, Input, Checkbox, Button, Card, Row, Col, message } from "antd";
+import { UserOutlined, MailOutlined, LockOutlined } from "@ant-design/icons";
 import api from "../../config/axios";
-
-const { Option } = Select;
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
+// Nếu muốn chuyển trang sau khi đăng ký:
+// import { useNavigate } from "react-router-dom";
 
 const RegisterPage = () => {
   const [form] = Form.useForm();
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
+  // const navigate = useNavigate();
 
   const validateEmail = (email) =>
     /^(?!.*\.\.)([^\s@]+@[^\s@]+\.[^\s@]{2,4})$/.test(email);
-  // const validatePhone = (phone) => /^(02|03|05|07|08|09)\d{8,9}$/.test(phone);
 
   const onFinish = async (values) => {
     setIsLoading(true);
     try {
-      const response = await api.post("/api/register", values);
-      console.log(response);
-      // eslint-disable-next-line no-unused-vars
+      const { userName, fullName, email, password } = values;
+
+      // ✅ Payload đúng theo API /api/register trong Swagger
+      const payload = {
+        userName: userName?.trim(),
+        password,
+        email: email?.trim(),
+        fullName: fullName?.trim(),
+        status: true,
+      };
+
+      const { data } = await api.post("/api/register", payload);
+
+      // Theo Swagger: code = 1010 là thành công
+      if (data?.code === 1010) {
+        message.success("Đăng ký thành công!");
+        toast.success("Đăng ký thành công!");
+        form.resetFields();
+        navigate("/login");
+      } else {
+        message.error(data?.message || "Đăng ký thất bại. Vui lòng thử lại.");
+      }
     } catch (e) {
-      message.error("Registration failed. Please try again.");
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Đăng ký thất bại. Vui lòng thử lại.";
+      message.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -46,9 +57,7 @@ const RegisterPage = () => {
   return (
     <div
       className="min-h-screen flex items-center justify-center"
-      style={{
-        background: "linear-gradient(135deg, #ffffffff 0%, #e2e1e1ff 100%)",
-      }}
+      style={{ background: "#f0f2f5" }}
     >
       <div className="relative z-10 w-full max-w-xl mx-4">
         <Card
@@ -57,140 +66,72 @@ const RegisterPage = () => {
           bodyStyle={{ padding: 24 }}
         >
           <div className="text-center mb-4">
-            <h2 className="text-2xl font-bold">Create your account</h2>
-            <p className="text-gray-500">It only takes a minute.</p>
+            <h2 className="text-2xl font-bold">Tạo tài khoản</h2>
+            <p className="text-gray-500">Tạo mới tài khoản.</p>
           </div>
 
           <Form
             form={form}
             layout="vertical"
             onFinish={onFinish}
-            initialValues={{
-              gender: "MALE",
-              agree: false,
-            }}
+            initialValues={{ agree: false }}
             requiredMark={false}
           >
             <Row gutter={16}>
-              {/* Full Name */}
               <Col span={24}>
                 <Form.Item
-                  label="Full name"
+                  label="Họ và tên"
                   name="fullName"
                   rules={[
-                    { required: true, message: "Full name is required" },
+                    { required: true, message: "Cần điền họ và tên!" },
                     {
                       validator: (_, v) =>
                         v && v.trim()
                           ? Promise.resolve()
                           : Promise.reject(
-                              new Error("Full name cannot be empty")
+                              new Error("Họ và tên không thể để trống")
                             ),
                     },
                   ]}
                 >
                   <Input
-                    placeholder="Full name"
+                    placeholder="Nguyễn Văn A"
                     prefix={<UserOutlined />}
                     allowClear
                   />
                 </Form.Item>
               </Col>
+
               <Col span={24}>
                 <Form.Item
-                  label="User name"
+                  label="Tên tài khoản"
                   name="userName"
-                  rules={[{ required: true, message: "User name is required" }]}
+                  rules={[{ required: true, message: "Cần điền tài khoản!" }]}
                 >
                   <Input
-                    placeholder="Username (Use to login)"
+                    placeholder="Tên tài khoản (dùng để đăng nhập)"
                     prefix={<UserOutlined />}
                     allowClear
                   />
                 </Form.Item>
               </Col>
-              {/* Gender */}
-              {/* <Col>
-                <Form.Item
-                  label="Gender"
-                  name="gender"
-                  rules={[
-                    { required: true, message: "Please select a gender" },
-                  ]}
-                >
-                  <Select
-                    placeholder="Select gender"
-                    options={[
-                      {
-                        label: (
-                          <span>
-                            <ManOutlined /> Male
-                          </span>
-                        ),
-                        value: "MALE",
-                      },
-                      {
-                        label: (
-                          <span>
-                            <WomanOutlined /> Female
-                          </span>
-                        ),
-                        value: "FEMALE",
-                      },
-                      { label: "Other", value: "OTHER" },
-                    ]}
-                  />
-                </Form.Item>
-              </Col> */}
 
-              {/* Phone */}
-              {/* <Col xs={24} md={24}>
-                <Form.Item
-                  label="Phone"
-                  name="phone"
-                  rules={[
-                    { required: true, message: "Phone is required" },
-                    {
-                      validator: (_, v) =>
-                        !v || validatePhone(v)
-                          ? Promise.resolve()
-                          : Promise.reject(
-                              new Error(
-                                "Phone must start with 0 and be 10–11 digits"
-                              )
-                            ),
-                    },
-                  ]}
-                >
-                  <Input
-                    placeholder="Phone (e.g. 09xxxxxxxx)"
-                    prefix={<PhoneOutlined />}
-                    inputMode="numeric"
-                    maxLength={11}
-                    allowClear
-                  />
-                </Form.Item>
-              </Col> */}
-
-              {/* Email */}
               <Col span={24}>
                 <Form.Item
                   label="Email"
                   name="email"
                   rules={[
-                    { required: true, message: "Email is required" },
+                    { required: true, message: "Cần điền email!" },
                     {
                       validator: (_, v) =>
                         !v || validateEmail(v)
                           ? Promise.resolve()
-                          : Promise.reject(
-                              new Error("Please enter a valid email")
-                            ),
+                          : Promise.reject(new Error("Điền email hợp lệ.")),
                     },
                   ]}
                 >
                   <Input
-                    placeholder="Email address"
+                    placeholder="abc@gmail.com"
                     type="email"
                     prefix={<MailOutlined />}
                     allowClear
@@ -198,57 +139,50 @@ const RegisterPage = () => {
                 </Form.Item>
               </Col>
 
-              {/* Password */}
               <Col xs={24} md={12}>
                 <Form.Item
-                  label="Password"
+                  label="Mật khẩu"
                   name="password"
                   rules={[
-                    { required: true, message: "Password is required" },
-                    {
-                      min: 8,
-                      message: "Password must be at least 8 characters",
-                    },
+                    { required: true, message: "Cần điền mật khẩu!" },
+                    { min: 4, message: "Mật khẩu phải có ít nhất 4 ký tự" },
                   ]}
                   hasFeedback
                 >
                   <Input.Password
-                    placeholder="Password (min 8 chars)"
+                    placeholder="Mật khẩu"
                     prefix={<LockOutlined />}
                   />
                 </Form.Item>
               </Col>
 
-              {/* Confirm Password */}
               <Col xs={24} md={12}>
                 <Form.Item
-                  label="Confirm password"
+                  label="Xác nhận mật khẩu"
                   name="confirmPassword"
                   dependencies={["password"]}
                   hasFeedback
                   rules={[
-                    { required: true, message: "Please confirm your password" },
+                    { required: true, message: "Vui lòng xác nhận mật khẩu" },
                     ({ getFieldValue }) => ({
                       validator(_, value) {
-                        if (!value || getFieldValue("password") === value) {
+                        if (!value || getFieldValue("password") === value)
                           return Promise.resolve();
-                        }
                         return Promise.reject(
-                          new Error("Passwords do not match")
+                          new Error("Mật khẩu không giống nhau")
                         );
                       },
                     }),
                   ]}
                 >
                   <Input.Password
-                    placeholder="Confirm password"
+                    placeholder="Xác nhận mật khẩu"
                     prefix={<LockOutlined />}
                   />
                 </Form.Item>
               </Col>
             </Row>
 
-            {/* Terms */}
             <Form.Item
               name="agree"
               valuePropName="checked"
@@ -257,14 +191,16 @@ const RegisterPage = () => {
                   validator: (_, v) =>
                     v
                       ? Promise.resolve()
-                      : Promise.reject(new Error("You must accept the Terms")),
+                      : Promise.reject(
+                          new Error("Bạn phải đồng ý với các điều khoản.")
+                        ),
                 },
               ]}
             >
               <Checkbox>
-                I agree to the{" "}
+                Tôi đồng ý với{" "}
                 <a href="#" onClick={(e) => e.preventDefault()}>
-                  Terms &amp; Privacy
+                  Điều khoản &amp; chính sách
                 </a>
               </Checkbox>
             </Form.Item>
@@ -277,14 +213,14 @@ const RegisterPage = () => {
                 block
                 size="large"
               >
-                {isLoading ? "Creating account..." : "Create account"}
+                {isLoading ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
               </Button>
             </Form.Item>
 
             <div className="text-center text-sm text-gray-600">
-              Already have an account?{" "}
+              Đã có tài khoản?{" "}
               <a href="/login" className="text-blue-600 hover:text-blue-500">
-                Sign in
+                Đăng nhập
               </a>
             </div>
           </Form>

@@ -12,23 +12,14 @@ import ManageUser from "./pages/manage-user/index.jsx";
 import ManageBatteryRentPackage from "./pages/manage-batteryrentpackage/index.jsx";
 import Overview from "./pages/overview-page/index.jsx";
 import ManageComplaints from "./pages/complaints/index.jsx";
-import Homepage from "./pages/homepage/index.jsx";
+import Homepage from "./components/homepage/layout.jsx";
 import StaffDashboard from "./components/dashboard/staff.jsx";
 import ManageStockBattery from "./pages/manage-stockbattery/index.jsx";
 import ManageBatterySwapTransaction from "./pages/manage-batteryswaptransaction/index.jsx";
 import AuthGate from "./components/protected-route/index.jsx";
-
+import FindStation from "./pages/find-station/index.jsx";
 function App() {
   const router = createBrowserRouter([
-    {
-      path: "/login",
-      element: <LoginPage />,
-    },
-    {
-      path: "/register",
-      element: <RegisterPage />,
-    },
-
     // ✅ Dashboard (ADMIN) được bảo vệ bởi AuthGate
     {
       path: "/dashboard",
@@ -71,6 +62,24 @@ function App() {
     {
       path: "/",
       element: <Homepage />,
+      children: [
+        {
+          index: true,
+          element: <Navigate to="stations" replace />,
+        },
+        {
+          path: "/login",
+          element: <LoginPage />,
+        },
+        {
+          path: "/register",
+          element: <RegisterPage />,
+        },
+        {
+          path: "/stations",
+          element: <FindStation />,
+        },
+      ],
     },
   ]);
 

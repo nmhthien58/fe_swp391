@@ -38,7 +38,7 @@ const LoginPage = () => {
         toast.error("Không nhận được token từ server!");
         return;
       }
-
+      localStorage.removeItem("token");
       // 🔹 Lưu token
       localStorage.setItem("token", token);
       toast.success("Đăng nhập thành công!");
@@ -71,7 +71,7 @@ const LoginPage = () => {
     <div
       className="min-h-screen flex items-center justify-center"
       style={{
-        background: "linear-gradient(135deg, #ffffffff 0%, #e2e1e1ff 100%)",
+        background: "#f0f2f5",
         position: "relative",
       }}
     >
@@ -98,8 +98,8 @@ const LoginPage = () => {
       <div className="relative z-10 w-full max-w-md mx-4">
         <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
           <div className="text-center mb-4">
-            <h2 className="text-2xl font-bold">Welcome Back</h2>
-            <p className="text-gray-500">Sign in to your account</p>
+            <h2 className="text-2xl font-bold">Đăng nhập</h2>
+            <p className="text-gray-500">Chào mừng bạn trở lại</p>
           </div>
 
           <Form
@@ -109,22 +109,22 @@ const LoginPage = () => {
             requiredMark={false}
           >
             <Form.Item
-              label="Username"
+              label="Tài khoản"
               name="userName"
-              rules={[{ required: true, message: "Username is required" }]}
+              rules={[{ required: true, message: "Cần điền tài khoản!" }]}
             >
               <Input
-                placeholder="Enter your username"
+                placeholder="Điền tài khoản của bạn"
                 prefix={<UserOutlined />}
               />
             </Form.Item>
 
             <Form.Item
-              label="Password"
+              label="Mật khẩu"
               name="password"
               rules={[
-                { required: true, message: "Password is required" },
-                { min: 4, message: "Password must be at least 4 characters" },
+                { required: true, message: "Cần nhập mật khẩu!" },
+                { min: 4, message: "Mật khẩu phải có ít nhất 4 ký tự" },
               ]}
             >
               <Input.Password
@@ -136,18 +136,18 @@ const LoginPage = () => {
             <Row justify="space-between" align="middle">
               <Col>
                 <a href="#" onClick={(e) => e.preventDefault()}>
-                  Forgot your password?
+                  Quên mật khẩu?
                 </a>
               </Col>
             </Row>
 
             <Form.Item style={{ marginTop: 8 }}>
               <Button type="primary" htmlType="submit" block size="large">
-                Sign in
+                Đăng nhập
               </Button>
             </Form.Item>
 
-            <Divider>Or continue with</Divider>
+            <Divider>Hoặc tiếp tục với</Divider>
 
             <div>
               <Button
@@ -161,9 +161,9 @@ const LoginPage = () => {
             </div>
             <Divider />
             <div className="text-center">
-              Don't have an account?{" "}
+              Chưa có tài khoản?{" "}
               <a href="/register" className="text-blue-600 hover:text-blue-500">
-                Register here
+                Đăng ký ở đây
               </a>
             </div>
           </Form>

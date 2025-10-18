@@ -18,6 +18,7 @@ import {
   createBatteryAtStation,
   updateBatteryStatus,
   BATTERY_STATUS,
+  getBatteriesByStationId, // thêm hàm mới
 } from "../../services/batteries";
 
 const statusStyle = {
@@ -41,17 +42,15 @@ export default function ManageStockBattery() {
 
   const [data, setData] = useState([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1); // antd 1-based
+  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [sorter, setSorter] = useState({
     field: "serialNumber",
     order: "ascend",
   });
 
-  // Lưu pin đang chọn để patch
   const [currentBattery, setCurrentBattery] = useState(null);
 
-  // thống kê nhanh
   const [stats, setStats] = useState({
     FULL: 0,
     CHARGING: 0,
@@ -59,6 +58,24 @@ export default function ManageStockBattery() {
     IN_USE: 0,
     EMPTY: 0,
   });
+
+  const [stationQuery, setStationQuery] = useState(""); // ô nhập Station ID
+  const [isStationMode, setIsStationMode] = useState(false); // đang lọc theo trạm
+
+  const applyStats = (items) => {
+    const counts = {
+      FULL: 0,
+      CHARGING: 0,
+      MAINTENANCE: 0,
+      IN_USE: 0,
+      EMPTY: 0,
+    };
+    items.forEach((b) => {
+      if (counts[b.status] !== undefined) counts[b.status] += 1;
+    });
+    setStats(counts);
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -67,47 +84,11 @@ export default function ManageStockBattery() {
           ? `${sorter.field},${sorter.order === "ascend" ? "asc" : "desc"}`
           : "serialNumber,asc";
 
-      const res = await getBatteries({
-        page: page - 1,
-        size: pageSize,
-        sort,
-      });
-
+      const res = await getBatteries({ page: page - 1, size: pageSize, sort });
       const items = res?.content || [];
       setData(items);
       setTotal(res?.totalElements ?? items.length);
-
-      const counts = {
-        FULL: 0,
-        CHARGING: 0,
-        MAINTENANCE: 0,
-        IN_USE: 0,
-        EMPTY: 0,
-      };
-
-      items.forEach((b) => {
-        switch (b.status) {
-          case "FULL":
-            counts.FULL++;
-            break;
-          case "CHARGING":
-            counts.CHARGING++;
-            break;
-          case "MAINTENANCE":
-            counts.MAINTENANCE++;
-            break;
-          case "IN_USE":
-            counts.IN_USE++;
-            break;
-          case "EMPTY":
-            counts.EMPTY++;
-            break;
-          default:
-            break;
-        }
-      });
-
-      setStats(counts);
+      applyStats(items);
     } finally {
       setLoading(false);
     }
@@ -115,10 +96,8 @@ export default function ManageStockBattery() {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, sorter]);
 
-  // Create battery (POST)
   const handleCreate = async (values) => {
     try {
       await createBatteryAtStation(values.stationId, values.status);
@@ -131,7 +110,6 @@ export default function ManageStockBattery() {
     }
   };
 
-  // Patch status (PATCH)
   const handlePatch = async (values) => {
     try {
       await updateBatteryStatus(currentBattery.batteryId, values);
@@ -144,6 +122,35 @@ export default function ManageStockBattery() {
       message.error(e?.response?.data?.message || "Cập nhật thất bại");
     }
   };
+
+  // ====================== Thêm chức năng lọc theo trạm ======================
+  const handleSearchByStation = async () => {
+    if (!stationQuery) {
+      return message.warning("Vui lòng nhập Station ID");
+    }
+    setLoading(true);
+    try {
+      const list = await getBatteriesByStationId(stationQuery);
+      setIsStationMode(true);
+      setData(list);
+      setTotal(list.length);
+      applyStats(list);
+      message.success(`Đã tải ${list.length} pin của trạm ${stationQuery}`);
+    } catch (e) {
+      message.error(
+        e?.response?.data?.message || "Không thể tải danh sách pin theo trạm"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearStationFilter = async () => {
+    setStationQuery("");
+    setIsStationMode(false);
+    fetchData();
+  };
+  // ==========================================================================
 
   const columns = [
     {
@@ -218,7 +225,6 @@ export default function ManageStockBattery() {
 
       {/* Thống kê nhanh */}
       <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
-        {/* Pin Đầy - xanh lá */}
         <div
           style={{
             flex: 1,
@@ -236,7 +242,6 @@ export default function ManageStockBattery() {
           </div>
         </div>
 
-        {/* Pin Đang Sạc - xanh lam nhạt như cũ */}
         <div
           style={{
             flex: 1,
@@ -254,7 +259,6 @@ export default function ManageStockBattery() {
           </div>
         </div>
 
-        {/* Pin Bảo Dưỡng - cam như cũ */}
         <div
           style={{
             flex: 1,
@@ -272,7 +276,6 @@ export default function ManageStockBattery() {
           </div>
         </div>
 
-        {/* Pin Đang Sử Dụng - tím */}
         <div
           style={{
             flex: 1,
@@ -290,7 +293,6 @@ export default function ManageStockBattery() {
           </div>
         </div>
 
-        {/* Pin Hết - đỏ */}
         <div
           style={{
             flex: 1,
@@ -304,16 +306,40 @@ export default function ManageStockBattery() {
             Pin Hết
           </div>
           <div style={{ fontSize: 32, fontWeight: "bold", color: "#ef4444" }}>
-            {stats.EMPTY ?? 0 /* hoặc đổi thành stats.DEPLETED tùy BE */}
+            {stats.EMPTY ?? 0}
           </div>
         </div>
       </div>
 
-      <Space style={{ marginBottom: 16 }}>
+      {/* Thanh điều khiển */}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 16,
+          flexWrap: "wrap",
+        }}
+      >
         <Button type="primary" onClick={() => setOpenCreate(true)}>
           Thêm pin mới
         </Button>
-      </Space>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Input
+            placeholder="Nhập Station ID…"
+            type="number"
+            value={stationQuery}
+            onChange={(e) => setStationQuery(e.target.value)}
+            style={{ width: 220 }}
+          />
+          <Button onClick={handleSearchByStation}>Tìm theo trạm</Button>
+          {isStationMode && (
+            <Button onClick={handleClearStationFilter}>Xóa lọc</Button>
+          )}
+        </div>
+      </div>
 
       <Table
         rowKey={(r) => String(r.batteryId)}
