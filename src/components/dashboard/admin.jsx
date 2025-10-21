@@ -1,37 +1,46 @@
 import React, { useState } from "react";
 import {
-  DesktopOutlined,
-  FileOutlined,
   PieChartOutlined,
-  TeamOutlined,
+  WarningOutlined,
+  HomeFilled,
   UserOutlined,
   LogoutOutlined,
-  WarningOutlined,
-  HomeFilled, // Added for dropdown menu
 } from "@ant-design/icons";
-import { Breadcrumb, Layout, Menu, theme, Avatar, Dropdown, Space } from "antd";
+import {
+  Breadcrumb,
+  Layout,
+  Menu,
+  Avatar,
+  Dropdown,
+  Space,
+  Button,
+} from "antd";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { IoPeopleOutline } from "react-icons/io5";
-import { HiLocationMarker } from "react-icons/hi";
 import { PiPackage } from "react-icons/pi";
 import { FaChargingStation } from "react-icons/fa";
 import { toast } from "react-toastify";
-// import { useDispatch, useSelector } from "react-redux"; // Import useSelector to get data from Redux
-// import { logout } from "../../redux/accountSlice";
+import { useSelector, useDispatch } from "react-redux";
+import { logout, selectUser } from "../../redux/accountSlice";
+import { persistor } from "../../redux/store";
 
 const { Header, Content, Footer, Sider } = Layout;
 
-function getItem(label, key, icon, children) {
+// Hàm tạo menu item
+function getItem(label, key, icon) {
   return {
     key,
     icon,
-    children,
     label: <Link to={key}>{label}</Link>,
   };
 }
 
 const items = [
-  getItem("Homepage", "/", <HomeFilled />),
+  getItem(
+    <span style={{ fontWeight: 700, fontSize: "16px" }}>Homepage</span>,
+    "/",
+    <HomeFilled style={{ fontSize: "16px" }} />
+  ),
   {
     type: "divider",
     style: { backgroundColor: "rgba(255, 255, 255, 0.3)", margin: "8px 16px" },
@@ -43,61 +52,70 @@ const items = [
     "rentpackage",
     <PiPackage size={15} />
   ),
-  getItem("Reports and statistics", "overview", <PieChartOutlined size={15} />),
+  getItem("Reports and Statistics", "overview", <PieChartOutlined size={15} />),
   getItem("Complaints", "complaints", <WarningOutlined size={15} />),
 ];
 
 const Dashboard = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
-
-  // Get account data from Redux store
-  // const account = useSelector((state) => state.account);
-  // const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
 
-  // Get current path and extract the selected key
+  const user = useSelector(selectUser);
+  const userNameToShow = user?.fullName || user?.userName || "Admin";
+
   const pathSegments = location.pathname.split("/").filter(Boolean);
   const selectedKey = pathSegments.length > 1 ? pathSegments[1] : "/";
 
-  // Define items for the dropdown menu
+  // Dropdown menu
   const itemsDropdown = [
     {
-      key: "1",
-      label: <Link to="/profile">Profile</Link>, // Example link
+      key: "profile",
+      disabled: true,
+      label: (
+        <div>
+          <strong style={{ display: "block" }}>{userNameToShow}</strong>
+          <span style={{ fontSize: 12, color: "#999" }}>
+            {(user?.roles && user?.roles[0]?.userType) || "ADMIN"}
+          </span>
+        </div>
+      ),
+    },
+    { type: "divider" },
+    {
+      key: "account",
+      label: <Link to="/account">Quản lý tài khoản</Link>,
       icon: <UserOutlined />,
     },
     {
-      key: "2",
+      key: "logout",
       label: (
-        <button
-          onClick={() => {
-            // dispatch(logout());
-            localStorage.removeItem("token");
-            navigate("/");
-            toast.success("Logout thành công");
+        <span
+          style={{ color: "red", fontWeight: 600 }}
+          onClick={async () => {
+            dispatch(logout());
+            await persistor.purge();
+            toast.success("Đăng xuất thành công!");
+            navigate("/", { replace: true });
           }}
         >
-          Logout
-        </button>
-      ), // Example link
-      icon: <LogoutOutlined />,
-      danger: true, // Mark as a dangerous action
+          Đăng xuất
+        </span>
+      ),
+      icon: <LogoutOutlined style={{ color: "red" }} />,
     },
   ];
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
+      {/* SIDEBAR */}
       <Sider
         width={260}
         collapsible
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
       >
-        <div className="demo-logo-vertical" />
         <Menu
           theme="dark"
           selectedKeys={[selectedKey]}
@@ -105,43 +123,70 @@ const Dashboard = () => {
           items={items}
         />
       </Sider>
+
       <Layout>
-        <Header style={{ padding: "0 24px", background: colorBgContainer }}>
-          {/* Header Content: User Info Dropdown */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              alignItems: "center",
-              height: "100%",
-            }}
+        {/* HEADER */}
+        <Header
+          style={{
+            padding: "0 24px",
+            background: "#fff",
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            height: 64,
+            borderBottom: "1px solid #f0f0f0",
+          }}
+        >
+          <Dropdown
+            menu={{ items: itemsDropdown }}
+            trigger={["click"]}
+            placement="bottomRight"
           >
-            <Dropdown menu={{ items: itemsDropdown }} trigger={["click"]}>
-              <a onClick={(e) => e.preventDefault()}>
-                <Space>
-                  <Avatar icon={<UserOutlined />} />
-                  {/* Use optional chaining and nullish coalescing for safety */}
-                  {/* <span>{account?.user?.name ?? "Guest"}</span> */}
-                </Space>
-              </a>
-            </Dropdown>
-          </div>
+            <Button
+              type="text"
+              style={{
+                height: 40,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "0 12px",
+                fontWeight: 500,
+                color: "#1677ff",
+              }}
+            >
+              <Avatar
+                size={28}
+                style={{
+                  backgroundColor: "#1677ff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                icon={<UserOutlined />}
+              />
+              <span style={{ lineHeight: 1 }}>{userNameToShow}</span>
+            </Button>
+          </Dropdown>
         </Header>
+
+        {/* MAIN CONTENT */}
         <Content style={{ margin: "0 16px" }}>
-          <Breadcrumb style={{ margin: "16px 0" }} items={[{ title: "" }]} />
+          <Breadcrumb style={{ margin: "16px 0" }} />
           <div
             style={{
               padding: 24,
               minHeight: 360,
-              background: colorBgContainer,
-              borderRadius: borderRadiusLG,
+              background: "#fff",
+              borderRadius: 8,
             }}
           >
             <Outlet />
           </div>
         </Content>
+
+        {/* FOOTER */}
         <Footer style={{ textAlign: "center" }}>
-          EV Battery Swap Station Management System
+          EV Battery Swap Station Management System ©2025
         </Footer>
       </Layout>
     </Layout>

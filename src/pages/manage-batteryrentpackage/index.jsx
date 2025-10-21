@@ -1,302 +1,364 @@
+// src/pages/ManageBatteryRentPackage.jsx
+import React, { useEffect, useState } from "react";
 import {
   Button,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Select,
   Table,
   Tag,
+  Space,
+  Modal,
+  Form,
+  InputNumber,
+  Input,
+  Popconfirm,
 } from "antd";
-import { useForm } from "antd/es/form/Form";
-import axios from "axios";
-import React, { useEffect, useState } from "react";
+import {
+  PlusOutlined,
+  ReloadOutlined,
+  EditOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 import { toast } from "react-toastify";
+import api from "../../config/axios";
+
+const currencyVN = (n) =>
+  typeof n === "number" ? n.toLocaleString("vi-VN") : n;
+
+const dateVN = (s) => {
+  if (!s) return "";
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? "" : d.toLocaleString("vi-VN");
+};
 
 const ManageBatteryRentPackage = () => {
-  const [packages, setPackages] = useState();
-  const [open, setOpen] = useState(false);
-  const [form] = useForm();
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // columns (hiển thị cột như nào)
+  // Modal state
+  const [open, setOpen] = useState(false);
+  const [form] = Form.useForm();
+  const [editingId, setEditingId] = useState(null); // null = create, number = edit
+
+  const fetchPlans = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/api/subscription-plans/all");
+      const data = Array.isArray(res?.data?.result) ? res.data.result : [];
+      setPlans(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Không tải được danh sách gói thuê.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const openCreate = () => {
+    setEditingId(null);
+    form.resetFields();
+    setOpen(true);
+  };
+
+  const openEdit = (record) => {
+    setEditingId(record?.planId);
+    form.setFieldsValue({
+      name: record?.name,
+      description: record?.description,
+      price: record?.price,
+      durationDays: record?.durationDays,
+      swapLimits: record?.swapLimits,
+      pricePerSwap: record?.pricePerSwap,
+      pricePerExtraSwap: record?.pricePerExtraSwap,
+    });
+    setOpen(true);
+  };
+
+  const handleSubmit = async (values) => {
+    const payload = {
+      name: values.name?.trim(),
+      description: values.description?.trim(),
+      price: Number(values.price),
+      durationDays: Number(values.durationDays),
+      swapLimits: Number(values.swapLimits),
+      pricePerSwap: Number(values.pricePerSwap),
+      pricePerExtraSwap: Number(values.pricePerExtraSwap),
+    };
+
+    try {
+      setLoading(true);
+      if (editingId == null) {
+        await api.post("/api/subscription-plans/create", payload);
+        toast.success("Tạo gói thuê thành công!");
+      } else {
+        await api.put(`/api/subscription-plans/update/${editingId}`, payload);
+        toast.success("Cập nhật gói thuê thành công!");
+      }
+      // đóng modal + reset form + fetch lại danh sách
+      setOpen(false);
+      form.resetFields();
+      await fetchPlans();
+    } catch (err) {
+      console.error(err);
+      toast.error("Thao tác thất bại. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (planId) => {
+    try {
+      setLoading(true);
+      await api.delete(`/api/subscription-plans/${planId}`); // Deactivate
+      toast.success("Đã vô hiệu hóa gói thuê thành công!");
+      await fetchPlans();
+    } catch (err) {
+      console.error(err);
+      toast.error("Không thể vô hiệu hóa gói thuê.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const columns = [
+    { title: "Plan ID", dataIndex: "planId", key: "planId", width: 100 },
+    { title: "Name", dataIndex: "name", key: "name", ellipsis: true },
     {
-      title: "Package ID",
-      dataIndex: "packageId",
-      key: "packageId",
-    },
-    {
-      title: "Package Name",
-      dataIndex: "packageName",
-      key: "packageName",
-    },
-    {
-      title: "Duration",
-      dataIndex: "duration",
-      key: "duration",
+      title: "Description",
+      dataIndex: "description",
+      key: "description",
+      ellipsis: true,
     },
     {
       title: "Price (VND)",
       dataIndex: "price",
       key: "price",
-      render: (price) => {
-        return price?.toLocaleString("vi-VN");
-      },
+      align: "right",
+      width: 140,
+      render: (v) => currencyVN(v),
     },
     {
-      title: "Battery Type",
-      dataIndex: "batteryType",
-      key: "batteryType",
+      title: "Duration (days)",
+      dataIndex: "durationDays",
+      key: "durationDays",
+      align: "center",
+      width: 140,
+      render: (v) => (v != null ? `${v}` : ""),
     },
     {
-      title: "Deposit (VND)",
-      dataIndex: "deposit",
-      key: "deposit",
-      render: (deposit) => {
-        return deposit?.toLocaleString("vi-VN");
-      },
+      title: "Swap limit",
+      dataIndex: "swapLimits",
+      key: "swapLimits",
+      align: "center",
+      width: 120,
+      render: (v) => (v != null ? `${v}` : "—"),
+    },
+    {
+      title: "Price / swap (VND)",
+      dataIndex: "pricePerSwap",
+      key: "pricePerSwap",
+      align: "right",
+      width: 170,
+      render: (v) => currencyVN(v),
+    },
+    {
+      title: "Extra swap (VND)",
+      dataIndex: "pricePerExtraSwap",
+      key: "pricePerExtraSwap",
+      align: "right",
+      width: 170,
+      render: (v) => currencyVN(v),
     },
     {
       title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status) => {
-        const isActive = status === "ACTIVE";
-        return (
-          <Tag color={isActive ? "green" : "red"}>
-            {isActive ? "ACTIVE" : "INACTIVE"}
-          </Tag>
-        );
-      },
+      dataIndex: "active",
+      key: "active",
+      width: 120,
+      render: (active) => (
+        <Tag color={active ? "green" : "red"}>
+          {active ? "ACTIVE" : "INACTIVE"}
+        </Tag>
+      ),
+    },
+    {
+      title: "Created / Updated",
+      key: "timestamps",
+      width: 250,
+      render: (_, r) => (
+        <Space direction="vertical" size={0}>
+          <span>Created: {dateVN(r.createdAt)}</span>
+          <span>Updated: {dateVN(r.updatedAt)}</span>
+        </Space>
+      ),
     },
     {
       title: "Action",
-      dataIndex: "id",
-      key: "id",
-      render: (id, record) => {
-        return (
-          <>
-            <Button
-              type="primary"
-              onClick={() => {
-                // 1. open modal
-                setOpen(true);
-
-                // 2. fill old data => form
-                form.setFieldsValue(record);
-              }}
-              style={{ marginRight: 8 }}
-            >
-              Edit
+      key: "action",
+      fixed: "right",
+      width: 180,
+      render: (_, record) => (
+        <Space>
+          <Button
+            icon={<EditOutlined />}
+            onClick={() => openEdit(record)}
+            type="primary"
+          >
+            Edit
+          </Button>
+          <Popconfirm
+            title="Deactivate plan?"
+            description="Gói sẽ bị vô hiệu hóa (DELETE API)."
+            okText="Yes"
+            cancelText="No"
+            onConfirm={() => handleDelete(record.planId)}
+          >
+            <Button icon={<DeleteOutlined />} danger>
+              Delete
             </Button>
-            <Popconfirm
-              title="Delete package"
-              description="Are you sure to delete this package?"
-              onConfirm={async () => {
-                await axios.delete(
-                  `https://68ce92096dc3f350777f6302.mockapi.io/Category/${id}`
-                );
-
-                fetchPackages();
-                toast.success("Successfully removed package!");
-              }}
-            >
-              <Button type="primary" danger>
-                Delete
-              </Button>
-            </Popconfirm>
-          </>
-        );
-      },
+          </Popconfirm>
+        </Space>
+      ),
     },
   ];
 
-  const fetchPackages = async () => {
-    console.log("fetching data from API...");
-
-    const response = await axios.get(
-      "https://68ce92096dc3f350777f6302.mockapi.io/Category"
-    );
-
-    console.log(response.data);
-    setPackages(response.data);
-  };
-
-  const handleSubmitForm = async (values) => {
-    const { id } = values;
-    let response;
-
-    if (id) {
-      // => update
-      response = await axios.put(
-        `https://68ce92096dc3f350777f6302.mockapi.io/Category/${id}`,
-        values
-      );
-    } else {
-      // => create new
-      response = await axios.post(
-        "https://68ce92096dc3f350777f6302.mockapi.io/Category",
-        values
-      );
-    }
-
-    console.log(response.data);
-    setOpen(false);
-    fetchPackages();
-    form.resetFields();
-    toast.success(
-      id ? "Successfully updated package!" : "Successfully created new package!"
-    );
-  };
-
-  useEffect(() => {
-    fetchPackages();
-  }, []);
-
   return (
-    <>
-      <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-800 pb-2">
+    <div>
+      <div className="mb-6 flex items-center gap-8">
+        <h2 className="text-3xl font-bold text-gray-800 pb-2 m-0">
           Manage Battery Rent Package
         </h2>
+        <Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            Add Plan
+          </Button>
+        </Space>
       </div>
-      <Button
-        type="primary"
-        onClick={() => {
-          setOpen(true);
-          form.resetFields();
-        }}
-        style={{ marginBottom: 16 }}
-      >
-        Add Package
-      </Button>
-      <Table columns={columns} dataSource={packages} rowKey="id" />
+
+      <Table
+        loading={loading}
+        columns={columns}
+        dataSource={plans}
+        rowKey="planId"
+        bordered
+        scroll={{ x: 1100 }}
+      />
+
       <Modal
-        title="Package Information"
+        title={
+          editingId == null
+            ? "Create Subscription Plan"
+            : `Edit Plan #${editingId}`
+        }
         open={open}
+        onOk={() => form.submit()}
         onCancel={() => {
           setOpen(false);
           form.resetFields();
         }}
-        onOk={() => form.submit()}
-        width={600}
+        destroyOnClose
+        width={700}
+        okText={editingId == null ? "Create" : "Save"}
+        confirmLoading={loading}
       >
         <Form
-          labelCol={{
-            span: 24,
-          }}
           form={form}
-          onFinish={handleSubmitForm}
+          layout="vertical"
+          onFinish={handleSubmit}
+          preserve={false}
         >
-          <Form.Item label="ID" name="id" hidden>
-            <Input />
+          <Form.Item
+            label="Name"
+            name="name"
+            rules={[
+              { required: true, message: "Vui lòng nhập tên gói!" },
+              { min: 2, message: "Tên tối thiểu 2 ký tự." },
+            ]}
+          >
+            <Input placeholder="Ví dụ: Gói tháng 1" />
           </Form.Item>
 
           <Form.Item
-            label="Package ID"
-            name="packageId"
-            rules={[
-              {
-                required: true,
-                message: "Please input package ID!",
-              },
-            ]}
+            label="Description"
+            name="description"
+            rules={[{ required: true, message: "Vui lòng nhập mô tả!" }]}
           >
-            <Input placeholder="e.g., PKG001" />
-          </Form.Item>
-
-          <Form.Item
-            label="Package Name"
-            name="packageName"
-            rules={[
-              {
-                required: true,
-                message: "Please input package name!",
-              },
-              {
-                min: 3,
-                message: "Name must be at least 3 characters long!",
-              },
-            ]}
-          >
-            <Input placeholder="e.g., Daily Standard" />
-          </Form.Item>
-
-          <Form.Item
-            label="Duration"
-            name="duration"
-            rules={[
-              {
-                required: true,
-                message: "Please select duration!",
-              },
-            ]}
-          >
-            <Select placeholder="Select duration">
-              <Select.Option value="Hourly">Hourly</Select.Option>
-              <Select.Option value="Daily">Daily</Select.Option>
-              <Select.Option value="Weekly">Weekly</Select.Option>
-              <Select.Option value="Monthly">Monthly</Select.Option>
-            </Select>
+            <Input.TextArea placeholder="Mô tả ngắn..." rows={3} />
           </Form.Item>
 
           <Form.Item
             label="Price (VND)"
             name="price"
-            rules={[
-              {
-                required: true,
-                message: "Please input price!",
-              },
-            ]}
+            rules={[{ required: true, message: "Vui lòng nhập giá!" }]}
           >
-            <Input type="number" placeholder="e.g., 50000" />
+            <InputNumber
+              min={0}
+              className="w-full"
+              placeholder="VD: 300000"
+              formatter={(v) =>
+                v ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""
+              }
+              parser={(v) => v?.replace(/\./g, "")}
+            />
           </Form.Item>
 
           <Form.Item
-            label="Battery Type"
-            name="batteryType"
-            rules={[
-              {
-                required: true,
-                message: "Please input battery type!",
-              },
-            ]}
+            label="Duration (days)"
+            name="durationDays"
+            rules={[{ required: true, message: "Vui lòng nhập số ngày!" }]}
           >
-            <Input placeholder="e.g., 48V 20Ah" />
+            <InputNumber min={1} className="w-full" placeholder="VD: 30" />
           </Form.Item>
 
           <Form.Item
-            label="Deposit (VND)"
-            name="deposit"
+            label="Swap limit"
+            name="swapLimits"
             rules={[
-              {
-                required: true,
-                message: "Please input deposit amount!",
-              },
+              { required: true, message: "Vui lòng nhập giới hạn swap!" },
             ]}
           >
-            <Input type="number" placeholder="e.g., 500000" />
+            <InputNumber min={0} className="w-full" placeholder="VD: 9" />
           </Form.Item>
 
           <Form.Item
-            label="Status"
-            name="status"
+            label="Price per swap (VND)"
+            name="pricePerSwap"
             rules={[
-              {
-                required: true,
-                message: "Please select status!",
-              },
+              { required: true, message: "Vui lòng nhập giá mỗi lần swap!" },
             ]}
           >
-            <Select placeholder="Select status">
-              <Select.Option value="ACTIVE">Active</Select.Option>
-              <Select.Option value="INACTIVE">Inactive</Select.Option>
-            </Select>
+            <InputNumber
+              min={0}
+              className="w-full"
+              placeholder="VD: 10000"
+              formatter={(v) =>
+                v ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""
+              }
+              parser={(v) => v?.replace(/\./g, "")}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Extra swap price (VND)"
+            name="pricePerExtraSwap"
+            rules={[
+              { required: true, message: "Vui lòng nhập giá swap thêm!" },
+            ]}
+          >
+            <InputNumber
+              min={0}
+              className="w-full"
+              placeholder="VD: 5000"
+              formatter={(v) =>
+                v ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""
+              }
+              parser={(v) => v?.replace(/\./g, "")}
+            />
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   );
 };
 

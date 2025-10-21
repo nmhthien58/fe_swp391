@@ -13,7 +13,12 @@ import {
 import { useForm } from "antd/es/form/Form";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
-
+import {
+  PlusOutlined,
+  ReloadOutlined,
+  EditOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 const ManageUser = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -181,20 +186,19 @@ const ManageUser = () => {
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 flex items-center gap-8">
         <h2 className="text-3xl font-bold text-gray-800 pb-2">Manage User</h2>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            form.resetFields();
+            setOpen(true);
+          }}
+        >
+          Add user (Register)
+        </Button>
       </div>
-
-      <Button
-        type="primary"
-        onClick={() => {
-          form.resetFields();
-          setOpen(true);
-        }}
-        style={{ marginBottom: 16 }}
-      >
-        Add user (Register)
-      </Button>
 
       <Table
         columns={columns}

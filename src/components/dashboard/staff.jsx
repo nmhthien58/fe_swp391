@@ -1,27 +1,30 @@
 import React, { useState } from "react";
 import {
-  DesktopOutlined,
-  FileOutlined,
   PieChartOutlined,
-  TeamOutlined,
-  UserOutlined,
-  LogoutOutlined,
   WarningOutlined,
   HomeFilled,
-  DollarOutlined, // Added for dropdown menu
+  UserOutlined,
+  LogoutOutlined,
+  DollarOutlined,
 } from "@ant-design/icons";
-import { Breadcrumb, Layout, Menu, theme, Avatar, Dropdown, Space } from "antd";
+import {
+  Breadcrumb,
+  Layout,
+  Menu,
+  theme,
+  Avatar,
+  Dropdown,
+  Button,
+} from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { IoPeopleOutline } from "react-icons/io5";
-import { HiLocationMarker } from "react-icons/hi";
-import { PiPackage, PiTrademarkLight } from "react-icons/pi";
-import { BiBattery } from "react-icons/bi";
-import { BsBatteryCharging } from "react-icons/bs";
-
+import { PiPackage } from "react-icons/pi";
 import { FiBattery } from "react-icons/fi";
 
-// import { useDispatch, useSelector } from "react-redux"; // Import useSelector to get data from Redux
-// import { logout } from "../../redux/accountSlice";
+import { useDispatch, useSelector } from "react-redux";
+import { logout, selectUser } from "../../redux/accountSlice";
+import { persistor } from "../../redux/store";
+import { toast } from "react-toastify";
 
 const { Header, Content, Footer, Sider } = Layout;
 
@@ -35,7 +38,11 @@ function getItem(label, key, icon, children) {
 }
 
 const items = [
-  getItem("Trang chủ", "/", <HomeFilled />),
+  getItem(
+    <span style={{ fontWeight: 700, fontSize: "16px" }}>Trang chủ</span>,
+    "/",
+    <HomeFilled style={{ fontSize: 16 }} />
+  ),
   {
     type: "divider",
     style: { backgroundColor: "rgba(255, 255, 255, 0.3)", margin: "8px 16px" },
@@ -50,36 +57,54 @@ const StaffDashboard = () => {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
-  // Get account data from Redux store
-  // const account = useSelector((state) => state.account);
-  // const dispatch = useDispatch();
+  const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get current path and extract the selected key
+  // Lấy user từ Redux (giống admin)
+  const user = useSelector(selectUser);
+  const userNameToShow = user?.fullName || user?.userName || "Staff";
+
+  // Tính key đang chọn theo URL
   const pathSegments = location.pathname.split("/").filter(Boolean);
   const selectedKey = pathSegments.length > 1 ? pathSegments[1] : "/";
-  // Define items for the dropdown menu
+
+  // Dropdown menu giống admin
   const itemsDropdown = [
-    // {
-    //   key: "1",
-    //   label: <Link to="/profile">Profile</Link>, // Example link
-    //   icon: <UserOutlined />,
-    // },
     {
-      key: "2",
+      key: "profileHeader",
+      disabled: true,
       label: (
-        <button
-          onClick={() => {
-            // dispatch(logout());
-            navigate("/");
+        <div>
+          <strong style={{ display: "block" }}>{userNameToShow}</strong>
+          <span style={{ fontSize: 12, color: "#999" }}>
+            {(user?.roles && user?.roles[0]?.userType) || "STAFF"}
+          </span>
+        </div>
+      ),
+    },
+    { type: "divider" },
+    {
+      key: "account",
+      label: <Link to="/account">Quản lý tài khoản</Link>,
+      icon: <UserOutlined />,
+    },
+    {
+      key: "logout",
+      label: (
+        <span
+          style={{ color: "red", fontWeight: 600 }}
+          onClick={async () => {
+            dispatch(logout());
+            await persistor.purge();
+            toast.success("Đăng xuất thành công!");
+            navigate("/", { replace: true });
           }}
         >
-          Logout
-        </button>
-      ), // Example link
-      icon: <LogoutOutlined />,
-      danger: true, // Mark as a dangerous action
+          Đăng xuất
+        </span>
+      ),
+      icon: <LogoutOutlined style={{ color: "red" }} />,
     },
   ];
 
@@ -99,28 +124,53 @@ const StaffDashboard = () => {
           items={items}
         />
       </Sider>
+
       <Layout>
-        <Header style={{ padding: "0 24px", background: colorBgContainer }}>
-          {/* Header Content: User Info Dropdown */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              alignItems: "center",
-              height: "100%",
-            }}
+        {/* HEADER */}
+        <Header
+          style={{
+            padding: "0 24px",
+            background: "#fff",
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            height: 64,
+            borderBottom: "1px solid #f0f0f0",
+          }}
+        >
+          <Dropdown
+            menu={{ items: itemsDropdown }}
+            trigger={["click"]}
+            placement="bottomRight"
           >
-            <Dropdown menu={{ items: itemsDropdown }} trigger={["click"]}>
-              <a onClick={(e) => e.preventDefault()}>
-                <Space>
-                  <Avatar icon={<UserOutlined />} />
-                  {/* Use optional chaining and nullish coalescing for safety */}
-                  {/* <span>{account?.user?.name ?? "Guest"}</span> */}
-                </Space>
-              </a>
-            </Dropdown>
-          </div>
+            <Button
+              type="text"
+              style={{
+                height: 40,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "0 12px",
+                fontWeight: 500,
+                color: "#1677ff",
+              }}
+            >
+              <Avatar
+                size={28}
+                style={{
+                  backgroundColor: "#1677ff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                icon={<UserOutlined />}
+              />
+              <span style={{ lineHeight: 1 }}>{userNameToShow}</span>
+            </Button>
+          </Dropdown>
         </Header>
+
+        {/* CONTENT */}
         <Content style={{ margin: "0 16px" }}>
           <Breadcrumb style={{ margin: "16px 0" }} items={[{ title: "" }]} />
           <div
@@ -134,6 +184,7 @@ const StaffDashboard = () => {
             <Outlet />
           </div>
         </Content>
+
         <Footer style={{ textAlign: "center" }}>
           EV Battery Swap Station Management System
         </Footer>

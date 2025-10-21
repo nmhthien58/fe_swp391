@@ -13,6 +13,12 @@ import {
 import { useForm } from "antd/es/form/Form";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
+import {
+  PlusOutlined,
+  ReloadOutlined,
+  EditOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 
 const ManageStation = () => {
   const [stations, setStations] = useState([]);
@@ -250,23 +256,32 @@ const ManageStation = () => {
 
   return (
     <>
-      <div className="mb-6">
+      {/* <div>
+      <div className="mb-6 flex items-center gap-8">
+        <h2 className="text-3xl font-bold text-gray-800 pb-2 m-0">
+          Manage Battery Rent Package
+        </h2>
+        {/* <Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            Add Plan
+          </Button>
+        </Space> */}
+      {/* </div> */}
+      <div className="mb-6 flex items-center gap-8">
         <h2 className="text-3xl font-bold text-gray-800 pb-2">
           Manage Station
         </h2>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            form.resetFields();
+            setOpen(true);
+          }}
+        >
+          Add station
+        </Button>
       </div>
-
-      <Button
-        type="primary"
-        onClick={() => {
-          form.resetFields();
-          setOpen(true);
-        }}
-        style={{ marginBottom: 16 }}
-      >
-        Add station
-      </Button>
-
       <Table
         columns={columns}
         dataSource={stations}
@@ -275,7 +290,6 @@ const ManageStation = () => {
         pagination={pagination}
         onChange={handleTableChange}
       />
-
       {/* Modal tạo/sửa station */}
       <Modal
         title="Station Information"
@@ -390,7 +404,6 @@ const ManageStation = () => {
           </Form.Item>
         </Form>
       </Modal>
-
       {/* Modal hiển thị danh sách batteries */}
       <Modal
         title="Batteries of Station"

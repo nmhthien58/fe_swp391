@@ -15,46 +15,50 @@ import { FaGoogle } from "react-icons/fa";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { setCredentials, setUser } from "../../redux/accountSlice";
 
 const LoginPage = () => {
   const [form] = Form.useForm();
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-
+  const dispatch = useDispatch();
   const onFinish = async (values) => {
     setIsLoading(true);
     try {
-      // 🔹 Gọi API login
+      // 1) Đăng nhập -> token
       const response = await api.post("/auth/login", null, {
-        params: {
-          userName: values.userName,
-          password: values.password,
-        },
+        params: { userName: values.userName, password: values.password },
       });
-
-      // 🔹 Lấy token
       const token = response?.data?.result?.token;
+      const refreshToken = response?.data?.result?.refreshToken;
       if (!token) {
         toast.error("Không nhận được token từ server!");
         return;
       }
-      localStorage.removeItem("token");
-      // 🔹 Lưu token
-      localStorage.setItem("token", token);
-      toast.success("Đăng nhập thành công!");
 
-      // 🔹 Kiểm tra quyền hoặc token hợp lệ
-      try {
-        const res = await api.get("/api/getDrivers");
-        if (res.status === 200) {
-          navigate("/dashboard");
-        } else {
-          navigate("/");
-        }
-      } catch (error) {
-        console.warn("Kiểm tra quyền thất bại:", error);
+      // (Khuyên dùng Redux Persist thay cho localStorage thủ công)
+      localStorage.setItem("token", token);
+
+      dispatch(setCredentials({ token, refreshToken }));
+
+      // 2) Lấy hồ sơ -> role
+      const me = await api.get("/api/myInfo");
+      const profile = me?.data?.result;
+      dispatch(setUser(profile));
+
+      // 3) Điều hướng theo role ở client (không cần gọi /api/getDrivers)
+      const role = profile?.roles?.[0]?.userType;
+      if (role === "ADMIN") {
+        navigate("/dashboard");
+      } else if (role === "STAFF") {
+        navigate("/staff");
+      } else {
+        // DRIVER hoặc không xác định
         navigate("/");
       }
+
+      toast.success("Đăng nhập thành công!");
     } catch (error) {
       console.error("Login error:", error);
       if (error.response?.status === 401) {
