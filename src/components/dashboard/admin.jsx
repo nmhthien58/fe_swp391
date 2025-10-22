@@ -53,7 +53,7 @@ const items = [
     <PiPackage size={15} />
   ),
   getItem("Reports and Statistics", "overview", <PieChartOutlined size={15} />),
-  getItem("Complaints", "complaints", <WarningOutlined size={15} />),
+  getItem("Manage Ticket", "manageticket", <WarningOutlined size={15} />),
 ];
 
 const Dashboard = () => {

@@ -11,13 +11,17 @@ import ManageStation from "./pages/manage-station/index.jsx";
 import ManageUser from "./pages/manage-user/index.jsx";
 import ManageBatteryRentPackage from "./pages/manage-batteryrentpackage/index.jsx";
 import Overview from "./pages/overview-page/index.jsx";
-import ManageComplaints from "./pages/complaints/index.jsx";
 import Homepage from "./components/homepage/layout.jsx";
 import StaffDashboard from "./components/dashboard/staff.jsx";
 import ManageStockBattery from "./pages/manage-stockbattery/index.jsx";
 import ManageBatterySwapTransaction from "./pages/manage-batteryswaptransaction/index.jsx";
 import AuthGate from "./components/protected-route/index.jsx";
 import FindStation from "./pages/find-station/index.jsx";
+import TransHistory from "./pages/transaction-history/index.jsx";
+import Support from "./pages/support-ticket/index.jsx";
+import Plans from "./pages/sub-plan/index.jsx";
+import MyInfo from "./pages/my-info/index.jsx";
+import ManageSupportTicket from "./pages/manage-support-ticket/index.jsx";
 function App() {
   const router = createBrowserRouter([
     // ✅ Dashboard (ADMIN) được bảo vệ bởi AuthGate
@@ -37,7 +41,7 @@ function App() {
         { path: "user", element: <ManageUser /> },
         { path: "rentpackage", element: <ManageBatteryRentPackage /> },
         { path: "overview", element: <Overview /> },
-        { path: "complaints", element: <ManageComplaints /> },
+        { path: "manageticket", element: <ManageSupportTicket /> },
       ],
     },
 
@@ -78,6 +82,22 @@ function App() {
         {
           path: "/stations",
           element: <FindStation />,
+        },
+        {
+          path: "/history",
+          element: <TransHistory />,
+        },
+        {
+          path: "/support",
+          element: <Support />,
+        },
+        {
+          path: "/plans",
+          element: <Plans />,
+        },
+        {
+          path: "/account",
+          element: <MyInfo />,
         },
       ],
     },

@@ -11,29 +11,13 @@ import {
   Space,
   Menu,
 } from "antd";
-import {
-  SearchOutlined,
-  UserOutlined,
-  ClockCircleOutlined,
-  CarOutlined,
-  UnorderedListOutlined,
-  CreditCardOutlined,
-  SettingOutlined,
-  LogoutOutlined,
-  DollarCircleFilled,
-  DollarCircleOutlined,
-} from "@ant-design/icons";
+import { SearchOutlined, DollarCircleOutlined } from "@ant-design/icons";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { BiBattery, BiPackage } from "react-icons/bi";
 import { renderToString } from "react-dom/server";
-import { FaBatteryFull } from "react-icons/fa";
-import { IoBatteryFull } from "react-icons/io5";
-import { CgBattery } from "react-icons/cg";
-import { MdBattery90 } from "react-icons/md";
-import { GiBattery100 } from "react-icons/gi";
-import { BsEvStation, BsEvStationFill } from "react-icons/bs";
+
+import { BsEvStationFill } from "react-icons/bs";
 
 // Fix leaflet's default icon issue with webpack
 // delete L.Icon.Default.prototype._getIconUrl;

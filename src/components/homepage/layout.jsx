@@ -171,10 +171,6 @@ export default function AppLayout() {
                   key: "ho-tro",
                   label: <NavLink to="/support">Hỗ Trợ</NavLink>,
                 },
-                {
-                  key: "tai-khoan",
-                  label: <NavLink to="/account">Tài Khoản</NavLink>,
-                },
               ]}
             />
           </Col>
