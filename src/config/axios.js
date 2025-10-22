@@ -11,7 +11,6 @@ export const injectStore = (store) => {
 
 const api = axios.create({
   baseURL: "https://ev-battery-swap-station-m-ngement-system.onrender.com/",
-  timeout: 15000,
 });
 
 // Các URL công khai (không cần token & không hiển thị toast 401)

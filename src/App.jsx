@@ -45,7 +45,7 @@ function App() {
     {
       path: "/staff",
       element: (
-        <AuthGate allow={["ADMIN"]}>
+        <AuthGate allow={["ADMIN", "STAFF"]}>
           <StaffDashboard />
         </AuthGate>
       ),

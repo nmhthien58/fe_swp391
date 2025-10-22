@@ -130,7 +130,7 @@ export default function AppLayout() {
       >
         <Row justify="space-between" align="middle" style={{ height: 64 }}>
           {/* Trái: quick nav (test) */}
-          <Col>
+          {/* <Col>
             <Space>
               <Button type="default">
                 <NavLink to="/dashboard">Admin Page</NavLink>
@@ -139,7 +139,7 @@ export default function AppLayout() {
                 <NavLink to="/staff">Staff Page</NavLink>
               </Button>
             </Space>
-          </Col>
+          </Col> */}
 
           {/* Giữa: menu */}
           <Col
@@ -158,6 +158,10 @@ export default function AppLayout() {
                 {
                   key: "tim-tram",
                   label: <NavLink to="/stations">Tìm Trạm</NavLink>,
+                },
+                {
+                  key: "plans",
+                  label: <NavLink to="/plans">Gói đăng ký</NavLink>,
                 },
                 {
                   key: "lich-su",
