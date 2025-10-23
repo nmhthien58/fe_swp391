@@ -14,7 +14,7 @@ const api = axios.create({
 });
 
 // Các URL công khai (không cần token & không hiển thị toast 401)
-const PUBLIC_URLS = ["/auth/login", "/auth/register"];
+const PUBLIC_URLS = ["/login", "/auth/register"];
 
 const isPublicUrl = (url = "") => PUBLIC_URLS.some((p) => url.includes(p));
 
@@ -42,13 +42,15 @@ api.interceptors.response.use(
 
     const status = error?.response?.status;
     const url = error?.config?.url || "";
+    const currentPath = window.location?.pathname || "";
 
     // 401: token hết hạn / không hợp lệ
     if (status === 401 && !isPublicUrl(url)) {
       // Xoá trạng thái đăng nhập trong Redux
       reduxStore?.dispatch(logout());
-      toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-
+      if (currentPath !== "/stations") {
+        toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      }
       // Tuỳ bạn: điều hướng ngay tại đây (đơn giản, không phụ thuộc router)
       // window.location.assign("/login");
 

@@ -1,4 +1,5 @@
-import React from "react";
+// src/pages/find-station/index.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Layout,
   Input,
@@ -6,168 +7,680 @@ import {
   Row,
   Col,
   Card,
-  Avatar,
   Typography,
   Space,
-  Menu,
+  List,
+  Tag,
+  Spin,
 } from "antd";
-import { SearchOutlined, DollarCircleOutlined } from "@ant-design/icons";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
+import { SearchOutlined, LoadingOutlined } from "@ant-design/icons";
 import { renderToString } from "react-dom/server";
-
 import { BsEvStationFill } from "react-icons/bs";
+import api from "../../config/axios";
 
-// Fix leaflet's default icon issue with webpack
-// delete L.Icon.Default.prototype._getIconUrl;
-// L.Icon.Default.mergeOptions({
-//   iconRetinaUrl:
-//     "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-//   iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-//   shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
-// });
+// ==== Goong JS (vector maps) ====
+import goongjs from "@goongmaps/goong-js";
+import "@goongmaps/goong-js/dist/goong-js.css";
+
+import { haversineMeters, metersToKmText } from "../../components/map/mapUtils";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
 
+// ====== CONFIG ======
+const GOONG_MAPTILES_KEY = "5rWK5vcJS8dTPc40MUoG5vgaiuYY4tk2FTnoh6AK";
+const GOONG_DIRECTIONS_KEY = "hz2CGz7GrqThwJGquwAnyAZrbJgsPEgjztaRd3zo";
+const GOONG_DIRECTIONS_URL = "https://rsapi.goong.io/Direction";
+const DEFAULT_CENTER = [106.7009, 10.7769]; // [lng, lat] HCMC
+
+// Icon trạm: HTML để gắn vào Marker Goong
+const stationMarkerHtml = renderToString(
+  <BsEvStationFill color="green" size={32} />
+);
+
+// Vẽ polygon xấp xỉ hình tròn (accuracy)
+function circlePolygon([lng, lat], radiusMeters, points = 64) {
+  const coords = [];
+  const R = 6371000;
+  for (let i = 0; i <= points; i++) {
+    const angle = (i * 2 * Math.PI) / points;
+    const dx = (radiusMeters * Math.cos(angle)) / R;
+    const dy = (radiusMeters * Math.sin(angle)) / R;
+    const newLat = lat + (dy * 180) / Math.PI;
+    const newLng = lng + (dx * 180) / Math.PI / Math.cos((lat * Math.PI) / 180);
+    coords.push([newLng, newLat]);
+  }
+  return {
+    type: "Feature",
+    geometry: { type: "Polygon", coordinates: [coords] },
+    properties: {},
+  };
+}
+
+// Giải mã encoded polyline (Google/Goong) -> mảng [lng, lat]
+function decodePolyline(str, precision = 5) {
+  let index = 0,
+    lat = 0,
+    lng = 0,
+    coordinates = [];
+  const factor = Math.pow(10, precision);
+
+  while (index < str.length) {
+    let b,
+      shift = 0,
+      result = 0;
+    do {
+      b = str.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = str.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    coordinates.push([lng / factor, lat / factor]); // [lng, lat]
+  }
+  return coordinates;
+}
+
 const FindStation = () => {
-  const position = [10.7769, 106.7009]; // Tọa độ ví dụ cho TP.HCM
-  const stationIcon = new L.DivIcon({
-    html: renderToString(<BsEvStationFill color="green" size={35} />),
-    className: "", // bỏ class mặc định của Leaflet để icon không bị style thêm
-    iconSize: [32, 32],
-    popupAnchor: [0, -16],
-  });
+  // Danh sách trạm: cột phải (không đổi) + map (đổi theo search)
+  const [initialStations, setInitialStations] = useState([]);
+  const [loadingList, setLoadingList] = useState(false);
+
+  const [mapStations, setMapStations] = useState([]);
+  const [loadingMap, setLoadingMap] = useState(false);
+
+  // Input tìm kiếm (debounce 500ms cho map)
+  const [typed, setTyped] = useState(" ");
+
+  // Định vị + trạm gần nhất
+  const [locating, setLocating] = useState(false);
+  const [userPos, setUserPos] = useState(null); // [lat, lng]
+  const [nearest, setNearest] = useState(null); // { ...station, __distance, __accuracy }
+
+  // Tuyến đường từ Directions API (mảng [lng,lat])
+  const [routeCoords, setRouteCoords] = useState(null);
+
+  // --- Goong map refs ---
+  const mapRef = useRef(null);
+  const mapContainerRef = useRef(null);
+  const markersRef = useRef([]); // quản lý vòng đời marker
+  const geolocateRef = useRef(null);
+  const mapStationsRef = useRef([]); // luôn giữ mapStations mới nhất cho listener
+
+  // Layer/Source ids
+  const lineSourceId = "nearest-line";
+  const lineLayerId = "nearest-line-layer";
+  const accuracySourceId = "user-accuracy";
+  const accuracyLayerId = "user-accuracy-layer";
+  const routeSourceId = "goong-route"; // <— Directions
+  const routeLayerId = "goong-route-layer"; // <— Directions
+
+  // Luôn đồng bộ mapStations -> ref (để listener geolocate dùng dữ liệu mới nhất)
+  useEffect(() => {
+    mapStationsRef.current = mapStations;
+  }, [mapStations]);
+
+  // Tọa độ cho polyline (người dùng -> trạm gần nhất) theo [lng, lat] — chỉ dùng khi CHƯA có route
+  const polylineLngLat = useMemo(() => {
+    if (!userPos || !nearest) return null;
+    const [ulat, ulng] = userPos;
+    const { latitude: slat, longitude: slng } = nearest;
+    if (typeof slat !== "number" || typeof slng !== "number") return null;
+    return [
+      [ulng, ulat],
+      [slng, slat],
+    ];
+  }, [userPos, nearest]);
+
+  // --- API ban đầu ---
+  const fetchInitialStations = async () => {
+    setLoadingList(true);
+    setLoadingMap(true);
+    try {
+      const res = await api.get(`/api/stations/search`, {
+        params: { keyword: " " },
+      });
+      const data = Array.isArray(res.data) ? res.data : [];
+      setInitialStations(data);
+      setMapStations(data);
+    } catch (e) {
+      console.error("Lỗi tải danh sách trạm:", e);
+      setInitialStations([]);
+      setMapStations([]);
+    } finally {
+      setLoadingList(false);
+      setLoadingMap(false);
+    }
+  };
+
+  // --- API tìm kiếm cho map ---
+  const fetchMapStations = async (kw) => {
+    setLoadingMap(true);
+    try {
+      const res = await api.get(`/api/stations/search`, {
+        params: { keyword: kw },
+      });
+      setMapStations(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      console.error("Lỗi khi tìm trạm:", e);
+      setMapStations([]);
+    } finally {
+      setLoadingMap(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInitialStations();
+  }, []);
+
+  // Debounce 500ms cho ô tìm kiếm
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const kw = typed.trim() === "" ? " " : typed;
+      fetchMapStations(kw);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [typed]);
+
+  // Khởi tạo Goong map 1 lần
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    goongjs.accessToken = GOONG_MAPTILES_KEY;
+    const map = new goongjs.Map({
+      container: mapContainerRef.current,
+      style: "https://tiles.goong.io/assets/goong_map_web.json",
+      center: DEFAULT_CENTER,
+      zoom: 13,
+    });
+    mapRef.current = map;
+
+    // Thêm GeolocateControl
+    const geolocate = new goongjs.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: false,
+      showAccuracyCircle: false,
+      showUserLocation: false,
+    });
+    geolocateRef.current = geolocate;
+    map.addControl(geolocate, "top-left");
+
+    // Khi style load xong, add nguồn & layer cho line/accuracy/route, + lắng nghe geolocate
+    map.on("load", () => {
+      // Nguồn & layer tuyến thẳng user -> nearest (fallback)
+      if (!map.getSource(lineSourceId)) {
+        map.addSource(lineSourceId, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: lineLayerId,
+          type: "line",
+          source: lineSourceId,
+          paint: {
+            "line-width": 5,
+            "line-opacity": 0.6,
+          },
+        });
+      }
+
+      // Nguồn & layer vòng accuracy quanh user
+      if (!map.getSource(accuracySourceId)) {
+        map.addSource(accuracySourceId, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: accuracyLayerId,
+          type: "fill",
+          source: accuracySourceId,
+          paint: {
+            "fill-opacity": 0.15,
+          },
+        });
+      }
+
+      // Nguồn & layer tuyến đường từ Directions API (đậm hơn)
+      if (!map.getSource(routeSourceId)) {
+        map.addSource(routeSourceId, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: routeLayerId,
+          type: "line",
+          source: routeSourceId,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: {
+            "line-width": 6,
+            "line-opacity": 0.95,
+            // "line-color": "#1677ff", // muốn set màu cụ thể thì mở
+          },
+        });
+      }
+
+      // Listener: khi geolocate xong
+      geolocate.on("geolocate", (e) => {
+        const { latitude, longitude, accuracy } = e.coords;
+
+        const valid = (mapStationsRef.current || []).filter(
+          (s) =>
+            typeof s.latitude === "number" && typeof s.longitude === "number"
+        );
+        if (!valid.length) {
+          setUserPos([latitude, longitude]);
+          setNearest(null);
+          setRouteCoords(null);
+          setLocating(false);
+          return;
+        }
+
+        const withDistance = valid.map((s) => ({
+          ...s,
+          __distance: haversineMeters(
+            latitude,
+            longitude,
+            s.latitude,
+            s.longitude
+          ),
+        }));
+        withDistance.sort((a, b) => a.__distance - b.__distance);
+        const best = withDistance[0];
+
+        setUserPos([latitude, longitude]);
+        setNearest({ ...best, __accuracy: accuracy });
+
+        // Gọi Directions API -> vẽ route
+        getAndDrawDirections(latitude, longitude, best.latitude, best.longitude)
+          .catch(() => setRouteCoords(null))
+          .finally(() => setLocating(false));
+      });
+
+      geolocate.on("error", () => {
+        setLocating(false);
+      });
+    });
+
+    // Cleanup
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  // Hàm gọi Directions API và vẽ route (street)
+  const getAndDrawDirections = async (olat, olng, dlat, dlng) => {
+    // Lưu ý: Directions yêu cầu tham số theo thứ tự lat,lng
+    const qs = new URLSearchParams({
+      origin: `${olat},${olng}`,
+      destination: `${dlat},${dlng}`,
+      vehicle: "car",
+      api_key: GOONG_DIRECTIONS_KEY,
+    }).toString();
+
+    const res = await fetch(`${GOONG_DIRECTIONS_URL}?${qs}`);
+    const json = await res.json();
+
+    const route = (json?.routes && json.routes[0]) || null;
+    const encoded = route?.overview_polyline?.points;
+    if (!encoded) {
+      // Không có đường — xóa route hiện tại và dùng line thẳng fallback
+      setRouteCoords(null);
+      fitUserAndStationBounds([olng, olat], [dlng, dlat]);
+      return;
+    }
+
+    const coords = decodePolyline(encoded); // -> [ [lng,lat], ... ]
+    setRouteCoords(coords);
+
+    // Fit theo route
+    const map = mapRef.current;
+    if (map && coords.length) {
+      const bounds = coords.reduce(
+        (b, p) => b.extend(p),
+        new goongjs.LngLatBounds(coords[0], coords[0])
+      );
+      map.fitBounds(bounds, { padding: 80, duration: 600 });
+    }
+  };
+
+  // Fit giữa 2 điểm (fallback khi không có route)
+  const fitUserAndStationBounds = (aLngLat, bLngLat) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const bounds = new goongjs.LngLatBounds(aLngLat, aLngLat).extend(bLngLat);
+    map.fitBounds(bounds, { padding: 80, duration: 500 });
+  };
+
+  // Clear & render lại markers trạm
+  const renderStationMarkers = () => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Clear markers cũ
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    // Thêm marker trạm
+    mapStations.forEach((st) => {
+      const { latitude: lat, longitude: lng } = st || {};
+      if (typeof lat !== "number" || typeof lng !== "number") return;
+
+      const el = document.createElement("div");
+      el.innerHTML = stationMarkerHtml;
+      el.style.transform = "translate(-50%, -50%)";
+
+      const marker = new goongjs.Marker(el).setLngLat([lng, lat]).addTo(map);
+      const html = `
+        <div style="min-width:220px">
+          <b>${st.name ?? "Trạm"}</b><br/>
+          ${st.address ?? ""}<br/>
+          Số pin: ${st?.batteries?.length || 0}<br/>
+          ${
+            nearest?.stationId === st.stationId && nearest?.__distance != null
+              ? `<span>Gần bạn nhất: ${metersToKmText(
+                  nearest.__distance
+                )}</span>`
+              : ""
+          }
+        </div>`;
+      const popup = new goongjs.Popup({ offset: 16 }).setHTML(html);
+      marker.setPopup(popup);
+
+      markersRef.current.push(marker);
+    });
+
+    // Fit bounds theo các trạm đang hiển thị (khi chưa có userPos & nearest)
+    const pts = mapStations
+      .filter(
+        (s) => typeof s.latitude === "number" && typeof s.longitude === "number"
+      )
+      .map((s) => [s.longitude, s.latitude]);
+
+    const shouldFitStations = !userPos && !nearest;
+
+    if (pts.length && shouldFitStations) {
+      const bounds = pts.reduce(
+        (b, p) => b.extend(p),
+        new goongjs.LngLatBounds(pts[0], pts[0])
+      );
+      map.fitBounds(bounds, { padding: 60, duration: 500 });
+    }
+  };
+
+  // Re-render markers khi danh sách trạm/nearest đổi
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!map.isStyleLoaded()) {
+      const onLoad = () => {
+        renderStationMarkers();
+        map.off("load", onLoad);
+      };
+      map.on("load", onLoad);
+      return;
+    }
+    renderStationMarkers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapStations, nearest, userPos]);
+
+  // Cập nhật đường đi (Directions) + fallback line + accuracy + nhãn khoảng cách
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    // 1) ROUTE từ Directions API (ưu tiên hiển thị)
+    const routeSrc = map.getSource(routeSourceId);
+    if (routeSrc) {
+      const fc = routeCoords
+        ? {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "LineString", coordinates: routeCoords },
+                properties: {},
+              },
+            ],
+          }
+        : { type: "FeatureCollection", features: [] };
+      routeSrc.setData(fc);
+    }
+
+    // 2) Tuyến thẳng user -> nearest (chỉ dùng khi KHÔNG có route)
+    const lineSrc = map.getSource(lineSourceId);
+    if (lineSrc) {
+      const fc =
+        !routeCoords && polylineLngLat
+          ? {
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  geometry: { type: "LineString", coordinates: polylineLngLat },
+                  properties: {},
+                },
+              ],
+            }
+          : { type: "FeatureCollection", features: [] };
+      lineSrc.setData(fc);
+    }
+
+    // 3) Vòng accuracy quanh user
+    const accSrc = map.getSource(accuracySourceId);
+    if (accSrc) {
+      if (userPos && nearest?.__accuracy) {
+        const [ulat, ulng] = userPos;
+        const poly = circlePolygon([ulng, ulat], nearest.__accuracy);
+        accSrc.setData({ type: "FeatureCollection", features: [poly] });
+      } else {
+        accSrc.setData({ type: "FeatureCollection", features: [] });
+      }
+    }
+
+    // 4) Popup nhãn khoảng cách ở trung điểm (ưu tiên theo route nếu có)
+    const coordsForMid =
+      routeCoords && routeCoords.length >= 2 ? routeCoords : polylineLngLat;
+    if (coordsForMid && nearest?.__distance != null) {
+      // trung điểm đơn giản: chọn đỉnh giữa
+      const mid = coordsForMid[Math.floor(coordsForMid.length / 2)];
+      if (!map.__distancePopup) {
+        map.__distancePopup = new goongjs.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          className: "distance-popup",
+        }).addTo(map);
+      }
+      map.__distancePopup
+        .setLngLat(mid)
+        .setHTML(metersToKmText(nearest.__distance));
+    } else if (map.__distancePopup) {
+      map.__distancePopup.remove();
+      map.__distancePopup = null;
+    }
+  }, [routeCoords, polylineLngLat, nearest, userPos]);
+
+  // Nút: Tìm trạm gần nhất (trigger GeolocateControl)
+  const handleFindNearest = () => {
+    const map = mapRef.current;
+    if (!map || !geolocateRef.current) return;
+
+    setLocating(true);
+    setRouteCoords(null); // reset route cũ
+    try {
+      geolocateRef.current.trigger(); // sẽ bắn sự kiện 'geolocate'
+      // eslint-disable-next-line no-unused-vars
+    } catch (err) {
+      // Fallback nếu trigger không khả dụng
+      navigator.geolocation?.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+
+          const valid = (mapStationsRef.current || []).filter(
+            (s) =>
+              typeof s.latitude === "number" && typeof s.longitude === "number"
+          );
+          if (!valid.length) {
+            setUserPos([latitude, longitude]);
+            setNearest(null);
+            setRouteCoords(null);
+            setLocating(false);
+            return;
+          }
+          const withDistance = valid.map((s) => ({
+            ...s,
+            __distance: haversineMeters(
+              latitude,
+              longitude,
+              s.latitude,
+              s.longitude
+            ),
+          }));
+          withDistance.sort((a, b) => a.__distance - b.__distance);
+          const best = withDistance[0];
+
+          setUserPos([latitude, longitude]);
+          setNearest({ ...best, __accuracy: accuracy });
+
+          await getAndDrawDirections(
+            latitude,
+            longitude,
+            best.latitude,
+            best.longitude
+          );
+          setLocating(false);
+        },
+        () => setLocating(false),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+  };
+
   return (
-    // <Layout style={{ minHeight: "100vh", backgroundColor: "#f0f2f5" }}>
     <Content style={{ padding: "24px 50px" }}>
       <Row gutter={24}>
+        {/* BẢN ĐỒ */}
         <Col span={16}>
           <Card bordered={false}>
             <Input
+              value={typed}
+              onChange={(e) => {
+                setTyped(e.target.value);
+                // Khi bắt đầu search lại -> reset nearest, userPos & route
+                setNearest(null);
+                setUserPos(null);
+                setRouteCoords(null);
+              }}
               placeholder="Tìm trạm theo địa chỉ hoặc tên trạm..."
               prefix={<SearchOutlined />}
-              style={{ marginBottom: 16 }}
+              style={{ marginBottom: 8 }}
+              allowClear
             />
-            <Space>
-              <Button type="primary">Tìm trạm gần nhất</Button>
-              <Button>Đặt lịch trước</Button>
-            </Space>
+            {loadingMap && (
+              <div
+                style={{
+                  color: "#1890ff",
+                  marginBottom: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Spin indicator={<LoadingOutlined spin />} size="small" />
+                Đang tìm kiếm...
+              </div>
+            )}
+            <Button
+              type="primary"
+              loading={locating}
+              onClick={handleFindNearest}
+            >
+              {locating ? "Đang định vị..." : "Tìm trạm gần nhất"}
+            </Button>{" "}
+            <Button>Đặt lịch đổi pin</Button>
             <div
               style={{
                 height: "68vh",
-                marginTop: "16px",
-                borderRadius: "8px",
+                marginTop: 8,
+                borderRadius: 8,
                 overflow: "hidden",
               }}
             >
-              <MapContainer
-                center={position}
-                zoom={15}
+              {/* Goong Map container */}
+              <div
+                ref={mapContainerRef}
                 style={{ height: "100%", width: "100%" }}
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  // attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                <Marker icon={stationIcon} position={[10.779, 106.702]}>
-                  <Popup>Có 12 pin</Popup>
-                </Marker>
-                <Marker icon={stationIcon} position={[10.775, 106.705]}>
-                  <Popup>Có 3 pin</Popup>
-                </Marker>
-                <Marker icon={stationIcon} position={[10.781, 106.699]}>
-                  <Popup>Bảo trì</Popup>
-                </Marker>
-              </MapContainer>
+              />
             </div>
           </Card>
         </Col>
+
+        {/* CỘT PHẢI */}
         <Col span={8}>
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
             <Card bordered={false}>
               <Row gutter={16} align="middle">
                 <Col>
-                  <img
-                    src="https://vinfast3slangson.com.vn/wp-content/uploads/2024/07/vinfast-vfe34-3480-351.jpg"
-                    alt="VinFast VFe34"
-                    style={{ width: "100px" }}
-                  />
-                </Col>
-                <Col>
-                  <Title level={5}>VinFast VFe34</Title>
-                  <Text strong>59A-123.45</Text>
-                  <br />
-                  <Text type="secondary">Loại pin: Lithium-ion 42 kWh</Text>
+                  <Title level={5}>Thông tin phương tiện đã liên kết</Title>
                 </Col>
               </Row>
             </Card>
+
             <Card
               bordered={false}
-              bodyStyle={{
-                borderLeft: "4px solid #1890ff",
-                paddingLeft: "20px",
-              }}
+              bodyStyle={{ borderLeft: "4px solid #1890ff", paddingLeft: 20 }}
             >
               <Title level={5}>Gói đã đăng ký</Title>
-              <Space align="center">
-                <DollarCircleOutlined />
-                <Text>Gói 1: 36 lượt đổi pin</Text>
-              </Space>
-              <br />
-              <Text style={{ marginLeft: "25px" }}></Text>
-              <br />
-              <Space style={{}}>
-                <Button type="primary">Xem gói</Button>
-              </Space>
             </Card>
-            {/* <Card
-                bordered={false}
-                bodyStyle={{
-                  borderLeft: "4px solid ",
-                  paddingLeft: "20px",
-                }}
-              >
-                <Title level={5}>Truy cập nhanh</Title>
-                <Row justify="space-around">
-                  <Col align="center">
-                    <Button
-                      type="text"
-                      icon={
-                        <UnorderedListOutlined style={{ fontSize: "24px" }} />
-                      }
-                    />
-                    <Text>Lịch sử đổi pin</Text>
-                  </Col>
-                  <Col align="center">
-                    <Button
-                      type="text"
-                      icon={<CreditCardOutlined style={{ fontSize: "24px" }} />}
-                    />
-                    <Text>Thanh toán</Text>
-                  </Col>
-                  <Col align="center">
-                    <Button
-                      type="text"
-                      icon={<SettingOutlined style={{ fontSize: "24px" }} />}
-                    />
-                    <Text>Cài đặt</Text>
-                  </Col>
-                  <Col align="center">
-                    <Button
-                      type="text"
-                      icon={<LogoutOutlined style={{ fontSize: "24px" }} />}
-                    />
-                    <Text>Đăng xuất</Text>
-                  </Col>
-                </Row>
-              </Card> */}
+
+            <Card
+              bordered={false}
+              bodyStyle={{ borderLeft: "4px solid #52c41a", paddingLeft: 20 }}
+            >
+              <Title level={5} style={{ marginBottom: 12 }}>
+                Các trạm hiện tại
+              </Title>
+
+              {loadingList ? (
+                <Spin />
+              ) : (
+                <List
+                  dataSource={initialStations}
+                  locale={{ emptyText: "Không có trạm" }}
+                  renderItem={(st) => (
+                    <List.Item key={st.stationId}>
+                      <div style={{ width: "100%" }}>
+                        <Text strong>{st.name}</Text>
+                        <br />
+                        <Text type="secondary">{st.address}</Text>
+                        <br />
+                        <Tag color={st.status === "ACTIVE" ? "green" : "red"}>
+                          {st.status}
+                        </Tag>
+                        <Text style={{ marginLeft: 8 }}>
+                          ({st.batteries?.length || 0} pin)
+                        </Text>
+                      </div>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </Card>
           </Space>
         </Col>
       </Row>
     </Content>
-    // </Layout>
   );
 };
 

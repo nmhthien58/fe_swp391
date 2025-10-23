@@ -64,6 +64,8 @@ export default function AppLayout() {
     if (path.startsWith("/history")) return "lich-su";
     if (path.startsWith("/support")) return "ho-tro";
     if (path.startsWith("/account")) return "tai-khoan";
+    if (path.startsWith("/plans")) return "plans";
+
     return "trang-chu";
   };
 
