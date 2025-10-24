@@ -69,7 +69,7 @@ const ManageBatteryRentPackage = () => {
       description: record?.description,
       price: record?.price,
       durationDays: record?.durationDays,
-      swapLimits: record?.swapLimits,
+      swapLimit: record?.swapLimit,
       pricePerSwap: record?.pricePerSwap,
       pricePerExtraSwap: record?.pricePerExtraSwap,
     });
@@ -82,7 +82,7 @@ const ManageBatteryRentPackage = () => {
       description: values.description?.trim(),
       price: Number(values.price),
       durationDays: Number(values.durationDays),
-      swapLimits: Number(values.swapLimits),
+      swapLimit: Number(values.swapLimit),
       pricePerSwap: Number(values.pricePerSwap),
       pricePerExtraSwap: Number(values.pricePerExtraSwap),
     };
@@ -149,8 +149,8 @@ const ManageBatteryRentPackage = () => {
     },
     {
       title: "Swap limit",
-      dataIndex: "swapLimits",
-      key: "swapLimits",
+      dataIndex: "swapLimit",
+      key: "swapLimit",
       align: "center",
       width: 120,
       render: (v) => (v != null ? `${v}` : "—"),
@@ -313,7 +313,7 @@ const ManageBatteryRentPackage = () => {
 
           <Form.Item
             label="Swap limit"
-            name="swapLimits"
+            name="swapLimit"
             rules={[
               { required: true, message: "Vui lòng nhập giới hạn swap!" },
             ]}

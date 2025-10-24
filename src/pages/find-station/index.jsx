@@ -12,11 +12,18 @@ import {
   List,
   Tag,
   Spin,
+  Modal,
+  Select,
+  DatePicker,
+  message,
 } from "antd";
 import { SearchOutlined, LoadingOutlined } from "@ant-design/icons";
 import { renderToString } from "react-dom/server";
 import { BsEvStationFill } from "react-icons/bs";
 import api from "../../config/axios";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+dayjs.extend(utc);
 
 // ==== Goong JS (vector maps) ====
 import goongjs from "@goongmaps/goong-js";
@@ -64,7 +71,6 @@ function decodePolyline(str, precision = 5) {
     lng = 0,
     coordinates = [];
   const factor = Math.pow(10, precision);
-
   while (index < str.length) {
     let b,
       shift = 0,
@@ -76,7 +82,6 @@ function decodePolyline(str, precision = 5) {
     } while (b >= 0x20);
     const dlat = result & 1 ? ~(result >> 1) : result >> 1;
     lat += dlat;
-
     shift = 0;
     result = 0;
     do {
@@ -86,7 +91,6 @@ function decodePolyline(str, precision = 5) {
     } while (b >= 0x20);
     const dlng = result & 1 ? ~(result >> 1) : result >> 1;
     lng += dlng;
-
     coordinates.push([lng / factor, lat / factor]); // [lng, lat]
   }
   return coordinates;
@@ -111,6 +115,14 @@ const FindStation = () => {
   // Tuyến đường từ Directions API (mảng [lng,lat])
   const [routeCoords, setRouteCoords] = useState(null);
 
+  // --- Booking modal state ---
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [bookingStationId, setBookingStationId] = useState(null);
+  const [bookingTime, setBookingTime] = useState(
+    dayjs().add(30, "minute").second(0).millisecond(0)
+  );
+
   // --- Goong map refs ---
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -126,12 +138,12 @@ const FindStation = () => {
   const routeSourceId = "goong-route"; // <— Directions
   const routeLayerId = "goong-route-layer"; // <— Directions
 
-  // Luôn đồng bộ mapStations -> ref (để listener geolocate dùng dữ liệu mới nhất)
+  // Luôn đồng bộ mapStations -> ref
   useEffect(() => {
     mapStationsRef.current = mapStations;
   }, [mapStations]);
 
-  // Tọa độ cho polyline (người dùng -> trạm gần nhất) theo [lng, lat] — chỉ dùng khi CHƯA có route
+  // Tọa độ polyline fallback
   const polylineLngLat = useMemo(() => {
     if (!userPos || !nearest) return null;
     const [ulat, ulng] = userPos;
@@ -206,7 +218,6 @@ const FindStation = () => {
     });
     mapRef.current = map;
 
-    // Thêm GeolocateControl
     const geolocate = new goongjs.GeolocateControl({
       positionOptions: { enableHighAccuracy: true },
       trackUserLocation: false,
@@ -216,9 +227,7 @@ const FindStation = () => {
     geolocateRef.current = geolocate;
     map.addControl(geolocate, "top-left");
 
-    // Khi style load xong, add nguồn & layer cho line/accuracy/route, + lắng nghe geolocate
     map.on("load", () => {
-      // Nguồn & layer tuyến thẳng user -> nearest (fallback)
       if (!map.getSource(lineSourceId)) {
         map.addSource(lineSourceId, {
           type: "geojson",
@@ -228,14 +237,9 @@ const FindStation = () => {
           id: lineLayerId,
           type: "line",
           source: lineSourceId,
-          paint: {
-            "line-width": 5,
-            "line-opacity": 0.6,
-          },
+          paint: { "line-width": 5, "line-opacity": 0.6 },
         });
       }
-
-      // Nguồn & layer vòng accuracy quanh user
       if (!map.getSource(accuracySourceId)) {
         map.addSource(accuracySourceId, {
           type: "geojson",
@@ -245,13 +249,9 @@ const FindStation = () => {
           id: accuracyLayerId,
           type: "fill",
           source: accuracySourceId,
-          paint: {
-            "fill-opacity": 0.15,
-          },
+          paint: { "fill-opacity": 0.15 },
         });
       }
-
-      // Nguồn & layer tuyến đường từ Directions API (đậm hơn)
       if (!map.getSource(routeSourceId)) {
         map.addSource(routeSourceId, {
           type: "geojson",
@@ -262,18 +262,12 @@ const FindStation = () => {
           type: "line",
           source: routeSourceId,
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: {
-            "line-width": 6,
-            "line-opacity": 0.95,
-            // "line-color": "#1677ff", // muốn set màu cụ thể thì mở
-          },
+          paint: { "line-width": 6, "line-opacity": 0.95 },
         });
       }
 
-      // Listener: khi geolocate xong
       geolocate.on("geolocate", (e) => {
         const { latitude, longitude, accuracy } = e.coords;
-
         const valid = (mapStationsRef.current || []).filter(
           (s) =>
             typeof s.latitude === "number" && typeof s.longitude === "number"
@@ -285,7 +279,6 @@ const FindStation = () => {
           setLocating(false);
           return;
         }
-
         const withDistance = valid.map((s) => ({
           ...s,
           __distance: haversineMeters(
@@ -301,50 +294,38 @@ const FindStation = () => {
         setUserPos([latitude, longitude]);
         setNearest({ ...best, __accuracy: accuracy });
 
-        // Gọi Directions API -> vẽ route
         getAndDrawDirections(latitude, longitude, best.latitude, best.longitude)
           .catch(() => setRouteCoords(null))
           .finally(() => setLocating(false));
       });
 
-      geolocate.on("error", () => {
-        setLocating(false);
-      });
+      geolocate.on("error", () => setLocating(false));
     });
 
-    // Cleanup
     return () => {
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
-  // Hàm gọi Directions API và vẽ route (street)
   const getAndDrawDirections = async (olat, olng, dlat, dlng) => {
-    // Lưu ý: Directions yêu cầu tham số theo thứ tự lat,lng
     const qs = new URLSearchParams({
       origin: `${olat},${olng}`,
       destination: `${dlat},${dlng}`,
       vehicle: "car",
       api_key: GOONG_DIRECTIONS_KEY,
     }).toString();
-
     const res = await fetch(`${GOONG_DIRECTIONS_URL}?${qs}`);
     const json = await res.json();
-
     const route = (json?.routes && json.routes[0]) || null;
     const encoded = route?.overview_polyline?.points;
     if (!encoded) {
-      // Không có đường — xóa route hiện tại và dùng line thẳng fallback
       setRouteCoords(null);
       fitUserAndStationBounds([olng, olat], [dlng, dlat]);
       return;
     }
-
-    const coords = decodePolyline(encoded); // -> [ [lng,lat], ... ]
+    const coords = decodePolyline(encoded);
     setRouteCoords(coords);
-
-    // Fit theo route
     const map = mapRef.current;
     if (map && coords.length) {
       const bounds = coords.reduce(
@@ -355,7 +336,6 @@ const FindStation = () => {
     }
   };
 
-  // Fit giữa 2 điểm (fallback khi không có route)
   const fitUserAndStationBounds = (aLngLat, bLngLat) => {
     const map = mapRef.current;
     if (!map) return;
@@ -363,24 +343,17 @@ const FindStation = () => {
     map.fitBounds(bounds, { padding: 80, duration: 500 });
   };
 
-  // Clear & render lại markers trạm
   const renderStationMarkers = () => {
     const map = mapRef.current;
     if (!map) return;
-
-    // Clear markers cũ
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
-
-    // Thêm marker trạm
     mapStations.forEach((st) => {
       const { latitude: lat, longitude: lng } = st || {};
       if (typeof lat !== "number" || typeof lng !== "number") return;
-
       const el = document.createElement("div");
       el.innerHTML = stationMarkerHtml;
       el.style.transform = "translate(-50%, -50%)";
-
       const marker = new goongjs.Marker(el).setLngLat([lng, lat]).addTo(map);
       const html = `
         <div style="min-width:220px">
@@ -397,11 +370,9 @@ const FindStation = () => {
         </div>`;
       const popup = new goongjs.Popup({ offset: 16 }).setHTML(html);
       marker.setPopup(popup);
-
       markersRef.current.push(marker);
     });
 
-    // Fit bounds theo các trạm đang hiển thị (khi chưa có userPos & nearest)
     const pts = mapStations
       .filter(
         (s) => typeof s.latitude === "number" && typeof s.longitude === "number"
@@ -409,7 +380,6 @@ const FindStation = () => {
       .map((s) => [s.longitude, s.latitude]);
 
     const shouldFitStations = !userPos && !nearest;
-
     if (pts.length && shouldFitStations) {
       const bounds = pts.reduce(
         (b, p) => b.extend(p),
@@ -419,7 +389,6 @@ const FindStation = () => {
     }
   };
 
-  // Re-render markers khi danh sách trạm/nearest đổi
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -435,12 +404,10 @@ const FindStation = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapStations, nearest, userPos]);
 
-  // Cập nhật đường đi (Directions) + fallback line + accuracy + nhãn khoảng cách
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    // 1) ROUTE từ Directions API (ưu tiên hiển thị)
     const routeSrc = map.getSource(routeSourceId);
     if (routeSrc) {
       const fc = routeCoords
@@ -458,7 +425,6 @@ const FindStation = () => {
       routeSrc.setData(fc);
     }
 
-    // 2) Tuyến thẳng user -> nearest (chỉ dùng khi KHÔNG có route)
     const lineSrc = map.getSource(lineSourceId);
     if (lineSrc) {
       const fc =
@@ -477,7 +443,6 @@ const FindStation = () => {
       lineSrc.setData(fc);
     }
 
-    // 3) Vòng accuracy quanh user
     const accSrc = map.getSource(accuracySourceId);
     if (accSrc) {
       if (userPos && nearest?.__accuracy) {
@@ -489,11 +454,9 @@ const FindStation = () => {
       }
     }
 
-    // 4) Popup nhãn khoảng cách ở trung điểm (ưu tiên theo route nếu có)
     const coordsForMid =
       routeCoords && routeCoords.length >= 2 ? routeCoords : polylineLngLat;
     if (coordsForMid && nearest?.__distance != null) {
-      // trung điểm đơn giản: chọn đỉnh giữa
       const mid = coordsForMid[Math.floor(coordsForMid.length / 2)];
       if (!map.__distancePopup) {
         map.__distancePopup = new goongjs.Popup({
@@ -511,22 +474,17 @@ const FindStation = () => {
     }
   }, [routeCoords, polylineLngLat, nearest, userPos]);
 
-  // Nút: Tìm trạm gần nhất (trigger GeolocateControl)
   const handleFindNearest = () => {
     const map = mapRef.current;
     if (!map || !geolocateRef.current) return;
-
     setLocating(true);
-    setRouteCoords(null); // reset route cũ
+    setRouteCoords(null);
     try {
-      geolocateRef.current.trigger(); // sẽ bắn sự kiện 'geolocate'
-      // eslint-disable-next-line no-unused-vars
-    } catch (err) {
-      // Fallback nếu trigger không khả dụng
+      geolocateRef.current.trigger();
+    } catch {
       navigator.geolocation?.getCurrentPosition(
         async (pos) => {
           const { latitude, longitude, accuracy } = pos.coords;
-
           const valid = (mapStationsRef.current || []).filter(
             (s) =>
               typeof s.latitude === "number" && typeof s.longitude === "number"
@@ -567,6 +525,49 @@ const FindStation = () => {
     }
   };
 
+  // ==== Booking modal handlers ====
+  const openBookingModal = () => {
+    // mặc định chọn trạm gần nhất nếu đã có, nếu không chọn trạm đầu tiên
+    const defaultStationId =
+      nearest?.stationId ??
+      initialStations?.find((s) => typeof s.stationId === "number")
+        ?.stationId ??
+      null;
+    setBookingStationId(defaultStationId);
+    setBookingTime(dayjs().add(30, "minute").second(0).millisecond(0));
+    setBookingOpen(true);
+  };
+
+  const submitBooking = async () => {
+    if (!bookingStationId || !bookingTime) {
+      message.warning("Vui lòng chọn trạm và thời gian.");
+      return;
+    }
+    try {
+      setBookingSubmitting(true);
+      // Backend yêu cầu bookingTime kiểu ISO UTC, ví dụ: 2025-10-25T03:06:16.862Z
+      const isoUtc = dayjs(bookingTime).utc().toISOString();
+
+      await api.post(`/api/booking/${bookingStationId}/bookings`, null, {
+        params: { bookingTime: isoUtc },
+      });
+
+      message.success("Đặt lịch thành công!");
+      setBookingOpen(false);
+    } catch (e) {
+      console.error(e);
+      message.error(
+        e?.response?.data?.message || "Đặt lịch thất bại, thử lại sau."
+      );
+    } finally {
+      setBookingSubmitting(false);
+    }
+  };
+
+  const disablePast = (current) => {
+    return current && current < dayjs().subtract(1, "minute");
+  };
+
   return (
     <Content style={{ padding: "24px 50px" }}>
       <Row gutter={24}>
@@ -577,7 +578,6 @@ const FindStation = () => {
               value={typed}
               onChange={(e) => {
                 setTyped(e.target.value);
-                // Khi bắt đầu search lại -> reset nearest, userPos & route
                 setNearest(null);
                 setUserPos(null);
                 setRouteCoords(null);
@@ -601,14 +601,18 @@ const FindStation = () => {
                 Đang tìm kiếm...
               </div>
             )}
-            <Button
-              type="primary"
-              loading={locating}
-              onClick={handleFindNearest}
-            >
-              {locating ? "Đang định vị..." : "Tìm trạm gần nhất"}
-            </Button>{" "}
-            <Button>Đặt lịch đổi pin</Button>
+
+            <Space>
+              <Button
+                type="primary"
+                loading={locating}
+                onClick={handleFindNearest}
+              >
+                {locating ? "Đang định vị..." : "Tìm trạm gần nhất"}
+              </Button>
+              <Button onClick={openBookingModal}>Đặt lịch đổi pin</Button>
+            </Space>
+
             <div
               style={{
                 height: "68vh",
@@ -617,7 +621,6 @@ const FindStation = () => {
                 overflow: "hidden",
               }}
             >
-              {/* Goong Map container */}
               <div
                 ref={mapContainerRef}
                 style={{ height: "100%", width: "100%" }}
@@ -651,7 +654,6 @@ const FindStation = () => {
               <Title level={5} style={{ marginBottom: 12 }}>
                 Các trạm hiện tại
               </Title>
-
               {loadingList ? (
                 <Spin />
               ) : (
@@ -680,6 +682,52 @@ const FindStation = () => {
           </Space>
         </Col>
       </Row>
+
+      {/* MODAL ĐẶT LỊCH */}
+      <Modal
+        title="Đặt lịch đổi pin"
+        open={bookingOpen}
+        onOk={submitBooking}
+        okText="Đặt lịch"
+        confirmLoading={bookingSubmitting}
+        onCancel={() => setBookingOpen(false)}
+        destroyOnClose
+      >
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <div>
+            <Text strong>Chọn trạm</Text>
+            <Select
+              style={{ width: "100%", marginTop: 6 }}
+              placeholder="Chọn trạm"
+              value={bookingStationId}
+              onChange={setBookingStationId}
+              options={initialStations.map((s) => ({
+                value: s.stationId,
+                label: `${s.name} — ${s.address}`,
+              }))}
+              showSearch
+              optionFilterProp="label"
+            />
+          </div>
+
+          <div>
+            <Text strong>Thời gian</Text>
+            <DatePicker
+              style={{ width: "100%", marginTop: 6 }}
+              showTime
+              value={bookingTime}
+              onChange={setBookingTime}
+              disabledDate={disablePast}
+              // để FE nhìn thấy theo local, nhưng gửi lên luôn ISO UTC:
+              format="YYYY-MM-DD HH:mm"
+            />
+            {/* <div style={{ marginTop: 6, color: "#888" }}>
+              Sẽ gửi lên server:{" "}
+              <code>{dayjs(bookingTime).utc().toISOString()}</code>
+            </div> */}
+          </div>
+        </Space>
+      </Modal>
     </Content>
   );
 };
