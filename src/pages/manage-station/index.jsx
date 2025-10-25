@@ -9,16 +9,12 @@ import {
   Table,
   Tag,
   Empty,
+  Space,
 } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
-import {
-  PlusOutlined,
-  ReloadOutlined,
-  EditOutlined,
-  DeleteOutlined,
-} from "@ant-design/icons";
+import { PlusOutlined } from "@ant-design/icons";
 
 const ManageStation = () => {
   const [stations, setStations] = useState([]);
@@ -27,10 +23,6 @@ const ManageStation = () => {
   const [open, setOpen] = useState(false);
   const [form] = useForm();
 
-  // Batteries modal
-  const [batteriesOpen, setBatteriesOpen] = useState(false);
-  const [selectedBatteries, setSelectedBatteries] = useState([]);
-
   // Phân trang
   const [pagination, setPagination] = useState({
     current: 1,
@@ -38,7 +30,12 @@ const ManageStation = () => {
     total: 0,
   });
 
-  // Cột bảng batteries
+  // ==== NEW: quản lý expand và dữ liệu batteries theo station ====
+  const [expandedRowKeys, setExpandedRowKeys] = useState([]);
+  const [batteriesByStation, setBatteriesByStation] = useState({}); // { [stationId]: Battery[] }
+  const [loadingBatteries, setLoadingBatteries] = useState({}); // { [stationId]: boolean }
+
+  // Bảng batteries (render trong expandedRowRender)
   const batteryCols = [
     { title: "ID", dataIndex: "batteryId", key: "batteryId", width: 90 },
     { title: "Serial", dataIndex: "serialNumber", key: "serialNumber" },
@@ -84,76 +81,6 @@ const ManageStation = () => {
     },
   ];
 
-  // Cột bảng station
-  const columns = [
-    { title: "Name", dataIndex: "name", key: "name" },
-    { title: "Address", dataIndex: "address", key: "address" },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status) => {
-        const isActive = status === "ACTIVE";
-        return (
-          <Tag color={isActive ? "green" : "red"}>
-            {isActive ? "Active" : "Inactive"}
-          </Tag>
-        );
-      },
-    },
-    { title: "Battery capacity", dataIndex: "capacity", key: "capacity" },
-    { title: "Image URL", dataIndex: "imageUrl", key: "imageUrl" },
-    {
-      title: "Action",
-      key: "action",
-      render: (_, record) => (
-        <>
-          <Button
-            onClick={() => {
-              const list = Array.isArray(record.batteries)
-                ? record.batteries
-                : [];
-              setSelectedBatteries(list);
-              setBatteriesOpen(true);
-            }}
-            style={{ marginRight: 8 }}
-          >
-            Batteries
-          </Button>
-
-          <Button
-            type="primary"
-            onClick={() => {
-              setOpen(true);
-              form.setFieldsValue({
-                stationId: record.stationId,
-                name: record.name,
-                address: record.address,
-                status: record.status,
-                capacity: record.capacity,
-                latitude: record.latitude,
-                longitude: record.longitude,
-                imageUrl: record.imageUrl,
-              });
-            }}
-            style={{ marginRight: 8 }}
-          >
-            Edit
-          </Button>
-
-          <Popconfirm
-            title="Delete station"
-            okText="Delete"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => handleDelete(record.stationId)}
-          >
-            <Button danger>Delete</Button>
-          </Popconfirm>
-        </>
-      ),
-    },
-  ];
-
   // ======= API calls =======
   const fetchStations = async (
     page = pagination.current,
@@ -191,6 +118,8 @@ const ManageStation = () => {
     try {
       await api.delete(`/api/stations/${stationId}`);
       toast.success("Đã xóa station!");
+      // Thu gọn nếu đang mở
+      setExpandedRowKeys((prev) => prev.filter((k) => k !== stationId));
       fetchStations();
     } catch (err) {
       console.error("Delete station error:", err);
@@ -223,7 +152,8 @@ const ManageStation = () => {
         await api.put(`/api/stations/${values.stationId}`, payload);
         toast.success("Cập nhật station thành công!");
       } else {
-        await api.post("/api/stations/stations", payload);
+        // (kiểm tra lại path backend của bạn — trước đây bạn để /api/stations/stations)
+        await api.post(`/api/stations`, payload);
         toast.success("Tạo mới station thành công!");
       }
       setOpen(false);
@@ -236,6 +166,57 @@ const ManageStation = () => {
         err.response?.data?.error ||
         "Tạo/sửa station thất bại (Bad Request).";
       toast.error(msg);
+    }
+  };
+
+  // Lazy load batteries cho 1 station (nếu record chưa có)
+  const loadBatteriesForStation = async (station) => {
+    const sid = station.stationId ?? station.id;
+    if (!sid) return;
+
+    // nếu đã có dữ liệu (từ server gắn kèm) thì cache ngay
+    if (Array.isArray(station.batteries)) {
+      setBatteriesByStation((m) => ({ ...m, [sid]: station.batteries }));
+      return;
+    }
+
+    // nếu đã từng load rồi thì bỏ qua
+    if (Array.isArray(batteriesByStation[sid])) return;
+
+    try {
+      setLoadingBatteries((m) => ({ ...m, [sid]: true }));
+
+      // Tùy backend của bạn:
+      // 1) Một số API trả `/api/stations/{id}` trong đó có field batteries
+      // 2) Hoặc có endpoint riêng `/api/stations/{id}/batteries`
+      // Thử cách 1, nếu không có batteries thì fallback cách 2
+      let batteries = [];
+      try {
+        const detail = await api.get(`/api/stations/${sid}`);
+        const b1 = detail?.data?.batteries;
+        if (Array.isArray(b1)) batteries = b1;
+        // eslint-disable-next-line no-unused-vars
+      } catch (e) {
+        // noop
+      }
+      if (!batteries.length) {
+        try {
+          const bRes = await api.get(`/api/stations/${sid}/batteries`);
+          const b2 = bRes?.data;
+          if (Array.isArray(b2)) batteries = b2;
+          // eslint-disable-next-line no-unused-vars
+        } catch (e) {
+          // noop
+        }
+      }
+
+      setBatteriesByStation((m) => ({ ...m, [sid]: batteries }));
+    } catch (e) {
+      console.error("Load batteries error:", e);
+      toast.error("Không tải được danh sách batteries cho trạm này.");
+      setBatteriesByStation((m) => ({ ...m, [sid]: [] }));
+    } finally {
+      setLoadingBatteries((m) => ({ ...m, [sid]: false }));
     }
   };
 
@@ -254,19 +235,85 @@ const ManageStation = () => {
     fetchStations(pager.current, pager.pageSize, sorter);
   };
 
+  // Toggle expand khi bấm nút Batteries
+  const toggleExpand = async (record) => {
+    const key = record.stationId ?? record.id;
+    const isOpen = expandedRowKeys.includes(key);
+
+    if (isOpen) {
+      setExpandedRowKeys((prev) => prev.filter((k) => k !== key));
+    } else {
+      setExpandedRowKeys((prev) => [...prev, key]);
+      await loadBatteriesForStation(record);
+    }
+  };
+
+  // Cột bảng station
+  const columns = [
+    { title: "Name", dataIndex: "name", key: "name" },
+    { title: "Address", dataIndex: "address", key: "address" },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (status) => {
+        const isActive = status === "ACTIVE";
+        return (
+          <Tag color={isActive ? "green" : "red"}>
+            {isActive ? "Active" : "Inactive"}
+          </Tag>
+        );
+      },
+    },
+    { title: "Battery capacity", dataIndex: "capacity", key: "capacity" },
+    // { title: "Image URL", dataIndex: "imageUrl", key: "imageUrl" },
+    {
+      title: "Action",
+      key: "action",
+      render: (_, record) => {
+        const key = record.stationId ?? record.id;
+        const isOpen = expandedRowKeys.includes(key);
+        return (
+          <Space>
+            <Button onClick={() => toggleExpand(record)}>
+              {isOpen ? "Hide batteries" : "Batteries"}
+            </Button>
+
+            <Button
+              type="primary"
+              onClick={() => {
+                setOpen(true);
+                form.setFieldsValue({
+                  stationId: record.stationId,
+                  name: record.name,
+                  address: record.address,
+                  status: record.status,
+                  capacity: record.capacity,
+                  latitude: record.latitude,
+                  longitude: record.longitude,
+                  imageUrl: record.imageUrl,
+                });
+              }}
+            >
+              Edit
+            </Button>
+
+            <Popconfirm
+              title="Delete station"
+              okText="Delete"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => handleDelete(record.stationId)}
+            >
+              <Button danger>Delete</Button>
+            </Popconfirm>
+          </Space>
+        );
+      },
+    },
+  ];
+
   return (
     <>
-      {/* <div>
-      <div className="mb-6 flex items-center gap-8">
-        <h2 className="text-3xl font-bold text-gray-800 pb-2 m-0">
-          Manage Battery Rent Package
-        </h2>
-        {/* <Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            Add Plan
-          </Button>
-        </Space> */}
-      {/* </div> */}
       <div className="mb-6 flex items-center gap-8">
         <h2 className="text-3xl font-bold text-gray-800 pb-2">
           Manage Station
@@ -282,6 +329,7 @@ const ManageStation = () => {
           Add station
         </Button>
       </div>
+
       <Table
         columns={columns}
         dataSource={stations}
@@ -289,7 +337,50 @@ const ManageStation = () => {
         loading={loading}
         pagination={pagination}
         onChange={handleTableChange}
+        // ==== NEW: cấu hình expand ngay dưới hàng ====
+        expandable={{
+          expandedRowKeys,
+          onExpand: async (expanded, record) => {
+            const key = record.stationId ?? record.id;
+            if (expanded) {
+              setExpandedRowKeys((prev) => [...prev, key]);
+              await loadBatteriesForStation(record);
+            } else {
+              setExpandedRowKeys((prev) => prev.filter((k) => k !== key));
+            }
+          },
+          expandedRowRender: (record) => {
+            const sid = record.stationId ?? record.id;
+            const loadingRow = !!loadingBatteries[sid];
+            const list =
+              batteriesByStation[sid] ??
+              (Array.isArray(record.batteries) ? record.batteries : []);
+
+            if (loadingRow) {
+              return <div style={{ padding: 12 }}>Đang tải batteries…</div>;
+            }
+            if (!list || list.length === 0) {
+              return (
+                <div style={{ padding: 12 }}>
+                  <Empty description="Không có battery nào cho station này" />
+                </div>
+              );
+            }
+            return (
+              <div style={{ background: "#fafafa", padding: 12 }}>
+                <Table
+                  columns={batteryCols}
+                  dataSource={list}
+                  rowKey={(r) => r.batteryId ?? r.id}
+                  pagination={{ pageSize: 8 }}
+                  size="small"
+                />
+              </div>
+            );
+          },
+        }}
       />
+
       {/* Modal tạo/sửa station */}
       <Modal
         title="Station Information"
@@ -403,25 +494,6 @@ const ManageStation = () => {
             <Input placeholder="https://example.com/image.jpg" />
           </Form.Item>
         </Form>
-      </Modal>
-      {/* Modal hiển thị danh sách batteries */}
-      <Modal
-        title="Batteries of Station"
-        open={batteriesOpen}
-        onCancel={() => setBatteriesOpen(false)}
-        footer={null}
-        width={900}
-      >
-        {selectedBatteries?.length ? (
-          <Table
-            columns={batteryCols}
-            dataSource={selectedBatteries}
-            rowKey={(r) => r.batteryId ?? r.id}
-            pagination={{ pageSize: 8 }}
-          />
-        ) : (
-          <Empty description="Không có battery nào cho station này" />
-        )}
       </Modal>
     </>
   );
