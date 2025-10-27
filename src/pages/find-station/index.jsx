@@ -15,7 +15,6 @@ import {
   Modal,
   Select,
   DatePicker,
-  message,
 } from "antd";
 import { SearchOutlined, LoadingOutlined } from "@ant-design/icons";
 import { renderToString } from "react-dom/server";
@@ -30,6 +29,7 @@ import goongjs from "@goongmaps/goong-js";
 import "@goongmaps/goong-js/dist/goong-js.css";
 
 import { haversineMeters, metersToKmText } from "../../components/map/mapUtils";
+import { toast } from "react-toastify";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -359,7 +359,9 @@ const FindStation = () => {
         <div style="min-width:220px">
           <b>${st.name ?? "Trạm"}</b><br/>
           ${st.address ?? ""}<br/>
-          Số pin: ${st?.batteries?.length || 0}<br/>
+Số pin đầy: ${
+        (st?.batteries || []).filter((b) => b.status === "FULL").length
+      }<br/>
           ${
             nearest?.stationId === st.stationId && nearest?.__distance != null
               ? `<span>Gần bạn nhất: ${metersToKmText(
@@ -540,23 +542,32 @@ const FindStation = () => {
 
   const submitBooking = async () => {
     if (!bookingStationId || !bookingTime) {
-      message.warning("Vui lòng chọn trạm và thời gian.");
+      toast.warning("Vui lòng chọn trạm và thời gian.");
       return;
     }
+
     try {
       setBookingSubmitting(true);
-      // Backend yêu cầu bookingTime kiểu ISO UTC, ví dụ: 2025-10-25T03:06:16.862Z
+      // Backend yêu cầu bookingTime kiểu ISO UTC
       const isoUtc = dayjs(bookingTime).utc().toISOString();
 
-      await api.post(`/api/booking/${bookingStationId}/bookings`, null, {
-        params: { bookingTime: isoUtc },
-      });
+      const res = await api.post(
+        `/api/booking/${bookingStationId}/bookings`,
+        null,
+        {
+          params: { bookingTime: isoUtc },
+        }
+      );
 
-      message.success("Đặt lịch thành công!");
-      setBookingOpen(false);
+      if (res.status === 200) {
+        toast.success("Đặt lịch thành công!");
+        setBookingOpen(false);
+      } else {
+        toast.error("Đặt lịch thất bại, thử lại sau.");
+      }
     } catch (e) {
       console.error(e);
-      message.error(
+      toast.error(
         e?.response?.data?.message || "Đặt lịch thất bại, thử lại sau."
       );
     } finally {
@@ -671,7 +682,13 @@ const FindStation = () => {
                           {st.status}
                         </Tag>
                         <Text style={{ marginLeft: 8 }}>
-                          ({st.batteries?.length || 0} pin)
+                          (
+                          {
+                            (st.batteries || []).filter(
+                              (b) => b.status === "FULL"
+                            ).length
+                          }{" "}
+                          pin đầy)
                         </Text>
                       </div>
                     </List.Item>

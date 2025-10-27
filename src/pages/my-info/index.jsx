@@ -9,15 +9,15 @@ import {
   Form,
   Input,
   Select,
-  Space,
+  Upload,
   message,
 } from "antd";
+import { UploadOutlined } from "@ant-design/icons";
 import { selectUser } from "../../redux/accountSlice";
 import api from "../../config/axios";
+import { toast } from "react-toastify";
 
 const { Option } = Select;
-
-// Điều chỉnh list này theo enum batteryType thực tế trên backend nếu cần
 const BATTERY_TYPES = ["LITHIUM_ION", "NICKEL_METAL_HYDRIDE", "LEAD_ACID"];
 
 const MyInfo = () => {
@@ -32,12 +32,50 @@ const MyInfo = () => {
     setOpen(false);
   };
 
+  const getDriverId = () => user?.driverId ?? user?.id ?? user?.userId ?? null;
+
+  // Gửi register-swap và bỏ qua kết quả/ lỗi
+  const fireAndForgetRegisterSwap = async () => {
+    const driverId = getDriverId();
+    if (!driverId) return;
+    try {
+      await api.post(`/api/${driverId}/register-swap`);
+      // Không kiểm tra/không hiển thị gì theo yêu cầu
+    } catch (e) {
+      // Bỏ qua hoàn toàn, không chặn flow
+      console.warn("register-swap ignored:", e);
+    }
+  };
+
+  const normFile = (e) => (Array.isArray(e) ? e : e?.fileList?.slice(-1));
+
   const onFinish = async (values) => {
+    const { vin, batteryType, model, manufacturer, image } = values;
+    const fileObj = image?.[0]?.originFileObj;
+    if (!fileObj) {
+      message.error("Vui lòng chọn ảnh phương tiện.");
+      return;
+    }
+
     try {
       setSubmitting(true);
-      // values: { vin, batteryType, model, manufacturer, imageUrl }
-      await api.post("/api/vehicles/register", values);
+
+      // 1) Gọi register-swap trước, không quan tâm response
+      await fireAndForgetRegisterSwap();
+
+      // 2) Tiếp tục liên kết phương tiện
+      const formData = new FormData();
+      formData.append("image", fileObj);
+
+      await api.post("/api/vehicles/register", formData, {
+        params: { vin, batteryType, model, manufacturer },
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
       message.success("Liên kết phương tiện thành công!");
+      toast.success(
+        "Liên kết phương tiện thành công, bây giờ bạn có thể sử dụng dịch vụ đổi pin!"
+      );
       handleCancel();
     } catch (err) {
       const detail =
@@ -45,15 +83,14 @@ const MyInfo = () => {
         err?.response?.data?.error ||
         "Không thể liên kết phương tiện.";
       message.error(detail);
+      toast.error(detail);
       console.error(err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!user) {
-    return <p>Không có thông tin người dùng. Vui lòng đăng nhập.</p>;
-  }
+  if (!user) return <p>Không có thông tin người dùng. Vui lòng đăng nhập.</p>;
 
   return (
     <>
@@ -63,7 +100,7 @@ const MyInfo = () => {
         style={{ maxWidth: 640, margin: "32px auto", borderRadius: 10 }}
         extra={
           <Button type="primary" onClick={handleOpen}>
-            Liên kết phương tiện
+            Liên kết phương tiện để sử dụng dịch vụ đổi pin
           </Button>
         }
       >
@@ -80,7 +117,6 @@ const MyInfo = () => {
         </Descriptions>
       </Card>
 
-      {/* Modal Form đăng ký phương tiện */}
       <Modal
         title="Liên kết phương tiện"
         open={open}
@@ -98,12 +134,9 @@ const MyInfo = () => {
           initialValues={{ batteryType: "LITHIUM_ION" }}
         >
           <Form.Item
-            label="VIN"
+            label="Biển số xe"
             name="vin"
-            rules={[
-              { required: true, message: "Vui lòng nhập VIN" },
-              //   { min: 5, message: "VIN tối thiểu 5 ký tự" },
-            ]}
+            rules={[{ required: true, message: "Vui lòng nhập biển số xe" }]}
           >
             <Input placeholder="VD: LRW3E7EK7NC123456" allowClear />
           </Form.Item>
@@ -127,7 +160,7 @@ const MyInfo = () => {
             name="model"
             rules={[{ required: true, message: "Vui lòng nhập model" }]}
           >
-            <Input placeholder="VD: Wave EV 2025" allowClear />
+            <Input placeholder="VD: VF3 2025" allowClear />
           </Form.Item>
 
           <Form.Item
@@ -135,18 +168,24 @@ const MyInfo = () => {
             name="manufacturer"
             rules={[{ required: true, message: "Vui lòng nhập hãng sản xuất" }]}
           >
-            <Input placeholder="VD: Honda" allowClear />
+            <Input placeholder="VD: VinFast" allowClear />
           </Form.Item>
 
           <Form.Item
-            label="Ảnh phương tiện (imageUrl)"
-            name="imageUrl"
-            rules={[
-              { required: true, message: "Vui lòng nhập link ảnh" },
-              { type: "url", message: "Link ảnh không hợp lệ" },
-            ]}
+            label="Ảnh phương tiện (image)"
+            name="image"
+            valuePropName="fileList"
+            getValueFromEvent={normFile}
+            rules={[{ required: true, message: "Vui lòng chọn ảnh" }]}
           >
-            <Input placeholder="https://.../vehicle.jpg" allowClear />
+            <Upload
+              accept="image/*"
+              listType="text"
+              beforeUpload={() => false}
+              maxCount={1}
+            >
+              <Button icon={<UploadOutlined />}>Chọn ảnh</Button>
+            </Upload>
           </Form.Item>
         </Form>
       </Modal>

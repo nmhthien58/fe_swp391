@@ -22,6 +22,7 @@ import Support from "./pages/support-ticket/index.jsx";
 import Plans from "./pages/sub-plan/index.jsx";
 import MyInfo from "./pages/my-info/index.jsx";
 import ManageSupportTicket from "./pages/manage-support-ticket/index.jsx";
+import ManageBooking from "./pages/manage-booking/index.jsx";
 function App() {
   const router = createBrowserRouter([
     // ✅ Dashboard (ADMIN) được bảo vệ bởi AuthGate
@@ -59,6 +60,7 @@ function App() {
           element: <Navigate to="stock" replace />,
         },
         { path: "stock", element: <ManageStockBattery /> },
+        { path: "booking", element: <ManageBooking /> },
         { path: "swap", element: <ManageBatterySwapTransaction /> },
       ],
     },

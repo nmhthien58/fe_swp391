@@ -6,6 +6,7 @@ import {
   UserOutlined,
   LogoutOutlined,
   DollarOutlined,
+  CalendarFilled,
 } from "@ant-design/icons";
 import {
   Breadcrumb,
@@ -48,7 +49,8 @@ const items = [
     style: { backgroundColor: "rgba(255, 255, 255, 0.3)", margin: "8px 16px" },
   },
   getItem("Quản lý pin tồn kho", "stock", <FiBattery size={15} />),
-  getItem("Quản lý giao dịch", "swap", <DollarOutlined size={15} />),
+  getItem("Quản lý lịch hẹn", "booking", <CalendarFilled size={15} />),
+  getItem("Quản lý giao dịch đổi pin", "swap", <DollarOutlined size={15} />),
 ];
 
 const StaffDashboard = () => {
