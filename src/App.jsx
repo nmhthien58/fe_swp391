@@ -23,6 +23,18 @@ import Plans from "./pages/sub-plan/index.jsx";
 import MyInfo from "./pages/my-info/index.jsx";
 import ManageSupportTicket from "./pages/manage-support-ticket/index.jsx";
 import ManageBooking from "./pages/manage-booking/index.jsx";
+import AppLayout from "./components/homepage/layout.jsx";
+import Home from "./pages/homepage/index.jsx";
+import { useSelector } from "react-redux";
+import { selectToken } from "./redux/accountSlice.js";
+function RootRedirect() {
+  const token = useSelector(selectToken);
+  return token ? (
+    <Navigate to="/stations" replace />
+  ) : (
+    <Navigate to="/home" replace />
+  );
+}
 function App() {
   const router = createBrowserRouter([
     // ✅ Dashboard (ADMIN) được bảo vệ bởi AuthGate
@@ -67,11 +79,15 @@ function App() {
 
     {
       path: "/",
-      element: <Homepage />,
+      element: <AppLayout />,
       children: [
         {
           index: true,
-          element: <Navigate to="stations" replace />,
+          element: <RootRedirect />, // Chuyển hướng dựa trên token
+        },
+        {
+          path: "/home",
+          element: <Home />,
         },
         {
           path: "/login",
