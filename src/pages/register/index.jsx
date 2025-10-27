@@ -56,15 +56,16 @@ const RegisterPage = () => {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ background: "#f0f2f5" }}
+      className="flex justify-center"
+      style={{
+        background: "#f0f2f5",
+        alignItems: "flex-start",
+        paddingTop: 100,
+        paddingBottom: 180, // chừa khoảng nhỏ dưới cho đẹp
+      }}
     >
       <div className="relative z-10 w-full max-w-xl mx-4">
-        <Card
-          className="backdrop-blur-sm"
-          style={{ borderRadius: 16 }}
-          bodyStyle={{ padding: 24 }}
-        >
+        <Card className="backdrop-blur-sm" style={{ borderRadius: 16 }}>
           <div className="text-center mb-4">
             <h2 className="text-2xl font-bold">Tạo tài khoản</h2>
             <p className="text-gray-500">Tạo mới tài khoản.</p>

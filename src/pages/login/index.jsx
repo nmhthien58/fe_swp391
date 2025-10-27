@@ -73,10 +73,12 @@ const LoginPage = () => {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center"
+      className="flex justify-center"
       style={{
         background: "#f0f2f5",
-        position: "relative",
+        alignItems: "flex-start",
+        paddingTop: 100,
+        paddingBottom: 120, // chừa khoảng nhỏ dưới cho đẹp
       }}
     >
       {/* 🔹 Overlay loading toàn trang */}
@@ -99,7 +101,7 @@ const LoginPage = () => {
         </div>
       )}
 
-      <div className="relative z-10 w-full max-w-md mx-4">
+      <div className="relative z-10 w-full max-w-lg mx-4">
         <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
           <div className="text-center mb-4">
             <h2 className="text-2xl font-bold">Đăng nhập</h2>
