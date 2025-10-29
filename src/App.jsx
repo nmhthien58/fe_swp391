@@ -27,6 +27,7 @@ import AppLayout from "./components/homepage/layout.jsx";
 import Home from "./pages/homepage/index.jsx";
 import { useSelector } from "react-redux";
 import { selectToken } from "./redux/accountSlice.js";
+import TestVerify from "./pages/test/test-verify.jsx";
 function RootRedirect() {
   const token = useSelector(selectToken);
   return token ? (
@@ -76,7 +77,10 @@ function App() {
         { path: "swap", element: <ManageBatterySwapTransaction /> },
       ],
     },
-
+    {
+      path: "/test",
+      element: <TestVerify />,
+    },
     {
       path: "/",
       element: <AppLayout />,
