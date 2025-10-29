@@ -51,11 +51,6 @@ const GOONG_DIRECTIONS_KEY = "hz2CGz7GrqThwJGquwAnyAZrbJgsPEgjztaRd3zo";
 const GOONG_DIRECTIONS_URL = "https://rsapi.goong.io/Direction";
 const DEFAULT_CENTER = [106.7009, 10.7769]; // [lng, lat] HCMC
 
-// Icon trạm: HTML để gắn vào Marker Goong
-const stationMarkerHtml = renderToString(
-  <BsEvStationFill color="green" size={32} />
-);
-
 // Vẽ polygon xấp xỉ hình tròn (accuracy)
 function circlePolygon([lng, lat], radiusMeters, points = 64) {
   const coords = [];
@@ -373,7 +368,7 @@ const FindStation = () => {
     const map = mapRef.current;
     if (!map) return;
 
-    // dọn các marker cũ
+    // dọn marker cũ
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
@@ -381,19 +376,29 @@ const FindStation = () => {
       const { latitude: lat, longitude: lng } = st || {};
       if (typeof lat !== "number" || typeof lng !== "number") return;
 
-      // DOM icon
+      // ==== NEW: Tính số pin FULL ====
+      const fullCount = (st?.batteries || []).filter(
+        (b) => b.status === "FULL"
+      ).length;
+
+      // ==== NEW: Xác định màu marker ====
+      let color = "green";
+      if (fullCount === 0) color = "red";
+      else if (fullCount < 5) color = "orange";
+
+      // ==== NEW: tạo icon với màu tương ứng ====
       const el = document.createElement("div");
-      el.innerHTML = stationMarkerHtml;
+      el.innerHTML = renderToString(
+        <BsEvStationFill color={color} size={32} />
+      );
       el.style.transform = "translate(-50%, -50%)";
 
-      // HTML popup có nút Đặt lịch
+      // ==== popup như cũ ====
       const popupHtml = `
       <div style="min-width:240px">
         <b>${st.name ?? "Trạm"}</b><br/>
         ${st.address ?? ""}<br/>
-        Số pin đầy: ${
-          (st?.batteries || []).filter((b) => b.status === "FULL").length
-        }<br/>
+        Số pin đầy: ${fullCount}<br/>
         ${
           nearest?.stationId === st.stationId && nearest?.__distance != null
             ? `<span>Gần bạn nhất: ${metersToKmText(
@@ -404,7 +409,9 @@ const FindStation = () => {
         <div style="margin-top:8px">
           <button id="book-${st.stationId}"
                   style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:0;border-radius:6px;background:#1677ff;color:#fff;cursor:pointer;">
-            <svg viewBox="64 64 896 896" focusable="false" data-icon="calendar" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M880 184H792V104a8 8 0 00-8-8h-48a8 8 0 00-8 8v80H296V104a8 8 0 00-8-8h-48a8 8 0 00-8 8v80H144c-17.7 0-32 14.3-32 32v624c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V216c0-17.7-14.3-32-32-32zm-40 616H184V376h656v424z"></path></svg>
+            <svg viewBox="64 64 896 896" focusable="false" data-icon="calendar" width="1em" height="1em" fill="currentColor" aria-hidden="true">
+              <path d="M880 184H792V104a8 8 0 00-8-8h-48a8 8 0 00-8 8v80H296V104a8 8 0 00-8-8h-48a8 8 0 00-8 8v80H144c-17.7 0-32 14.3-32 32v624c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V216c0-17.7-14.3-32-32-32zm-40 616H184V376h656v424z"></path>
+            </svg>
             Đặt lịch tại trạm này
           </button>
         </div>
@@ -412,35 +419,33 @@ const FindStation = () => {
     `;
 
       const popup = new goongjs.Popup({ offset: 16 }).setHTML(popupHtml);
-
-      // bind click cho nút sau khi popup mở
       popup.on("open", () => {
         const btn = document.getElementById(`book-${st.stationId}`);
         if (btn) {
           btn.onclick = (e) => {
             e.preventDefault();
-            // dùng hàm đã có sẵn để mở modal và set stationId
             openBookingForStation(st.stationId);
           };
         }
       });
 
+      // ==== Thêm marker lên map ====
       const marker = new goongjs.Marker(el)
         .setLngLat([lng, lat])
         .setPopup(popup)
         .addTo(map);
+
       markersRef.current.push(marker);
     });
 
-    // fit bounds lần đầu khi chưa có userPos/nearest
+    // Fit bounds như cũ
     const pts = mapStations
       .filter(
         (s) => typeof s.latitude === "number" && typeof s.longitude === "number"
       )
       .map((s) => [s.longitude, s.latitude]);
 
-    const shouldFitStations = !userPos && !nearest;
-    if (pts.length && shouldFitStations) {
+    if (pts.length && !userPos && !nearest) {
       const bounds = pts.reduce(
         (b, p) => b.extend(p),
         new goongjs.LngLatBounds(pts[0], pts[0])
@@ -741,6 +746,47 @@ const FindStation = () => {
                 ref={mapContainerRef}
                 style={{ height: "100%", width: "100%" }}
               />
+            </div>
+
+            {/* ==== CHÚ THÍCH MÀU MARKER ==== */}
+            <div
+              style={{
+                marginTop: 12,
+                background: "#f5f5f5",
+                borderRadius: 8,
+                padding: "10px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <BsEvStationFill color="green" size={20} />
+                <Text strong>Trạm có nhiều pin đầy</Text>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginLeft: 15,
+                }}
+              >
+                <BsEvStationFill color="orange" size={20} />
+                <Text strong>Trạm ít pin đầy</Text>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginLeft: 15,
+                }}
+              >
+                <BsEvStationFill color="red" size={20} />
+                <Text strong>Trạm hết pin đầy</Text>
+              </div>
             </div>
           </Card>
         </Col>

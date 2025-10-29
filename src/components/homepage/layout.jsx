@@ -118,7 +118,10 @@ export default function AppLayout() {
   const menuItems = !token
     ? [{ key: "home", label: <NavLink to="/home">Trang chủ</NavLink> }]
     : [
-        { key: "tim-tram", label: <NavLink to="/stations">Tìm Trạm</NavLink> },
+        {
+          key: "tim-tram",
+          label: <NavLink to="/stations">Tìm Trạm & Đặt Lịch</NavLink>,
+        },
         { key: "plans", label: <NavLink to="/plans">Gói đăng ký</NavLink> },
         { key: "lich-su", label: <NavLink to="/history">Lịch Sử</NavLink> },
         { key: "ho-tro", label: <NavLink to="/support">Hỗ Trợ</NavLink> },
