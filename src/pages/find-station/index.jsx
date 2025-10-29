@@ -15,6 +15,7 @@ import {
   Modal,
   Select,
   DatePicker,
+  message,
   Tooltip,
 } from "antd";
 import {
@@ -34,7 +35,11 @@ import goongjs from "@goongmaps/goong-js";
 import "@goongmaps/goong-js/dist/goong-js.css";
 
 import { haversineMeters, metersToKmText } from "../../components/map/mapUtils";
-import { toast } from "react-toastify";
+
+// ===== NEW: Redux + Router
+import { useSelector } from "react-redux";
+import { selectUser } from "../../redux/accountSlice";
+import { useNavigate } from "react-router-dom";
 import { IoLocationOutline } from "react-icons/io5";
 
 const { Content } = Layout;
@@ -103,7 +108,12 @@ function decodePolyline(str, precision = 5) {
 }
 
 const FindStation = () => {
-  // Danh sách trạm: cột phải (không đổi) + map (đổi theo search)
+  // ===== Redux + Router =====
+  const user = useSelector(selectUser);
+  const driverId = user?.driverId ?? null; // BE trả account.user.driverId
+  const navigate = useNavigate();
+
+  // ===== Danh sách trạm: cột phải (không đổi) + map (đổi theo search)
   const [initialStations, setInitialStations] = useState([]);
   const [loadingList, setLoadingList] = useState(false);
 
@@ -129,6 +139,12 @@ const FindStation = () => {
     dayjs().add(30, "minute").second(0).millisecond(0)
   );
 
+  // --- NEW: Active plan state ---
+  const [activeSub, setActiveSub] = useState(null); // toàn bộ subscription
+  const [planLoading, setPlanLoading] = useState(false);
+  const [activePlan, setActivePlan] = useState(null); // {name, description,...}
+  const [planError, setPlanError] = useState(null);
+
   // --- Goong map refs ---
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -143,7 +159,11 @@ const FindStation = () => {
   const accuracyLayerId = "user-accuracy-layer";
   const routeSourceId = "goong-route"; // <— Directions
   const routeLayerId = "goong-route-layer"; // <— Directions
-
+  const openBookingForStation = (stationId) => {
+    setBookingStationId(stationId);
+    setBookingTime(dayjs().add(30, "minute").second(0).millisecond(0));
+    setBookingOpen(true);
+  };
   // Luôn đồng bộ mapStations -> ref
   useEffect(() => {
     mapStationsRef.current = mapStations;
@@ -349,7 +369,6 @@ const FindStation = () => {
     map.fitBounds(bounds, { padding: 80, duration: 500 });
   };
 
-  // Thay toàn bộ hàm renderStationMarkers bằng phiên bản có nút đặt lịch trong popup
   const renderStationMarkers = () => {
     const map = mapRef.current;
     if (!map) return;
@@ -566,7 +585,34 @@ const FindStation = () => {
     }
   };
 
-  // ==== Booking handlers ====
+  // ==== NEW: Active subscription fetch ====
+  const fetchActiveSubscription = async (id) => {
+    if (!id) {
+      setActiveSub(null);
+      setActivePlan(null);
+      return;
+    }
+    setPlanLoading(true);
+    setPlanError(null);
+    try {
+      const res = await api.get(`/api/driver-subscriptions/${id}/active`);
+      const data = res?.data?.plan ? res.data : res.data; // payload thực tế
+      setActiveSub(data); // ⬅️ có startDate, endDate, swapsUsed
+      setActivePlan(data?.plan || null);
+    } catch (err) {
+      setActiveSub(null);
+      setActivePlan(null);
+      setPlanError(err?.response?.data?.message || `Bạn chưa đăng ký gói.`);
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (driverId) fetchActiveSubscription(driverId);
+  }, [driverId]);
+
+  // ==== Booking modal handlers ====
   const openBookingModal = () => {
     // mặc định chọn trạm gần nhất nếu đã có, nếu không chọn trạm đầu tiên
     const defaultStationId =
@@ -579,45 +625,26 @@ const FindStation = () => {
     setBookingOpen(true);
   };
 
-  // NEW: mở modal với station được chọn từ icon calendar ở cột phải
-  const openBookingForStation = (stationId) => {
-    setBookingStationId(stationId);
-    setBookingTime(dayjs().add(30, "minute").second(0).millisecond(0));
-    setBookingOpen(true);
-  };
-
   const submitBooking = async () => {
     if (!bookingStationId || !bookingTime) {
-      toast.warning("Vui lòng chọn trạm và thời gian.");
+      message.warning("Vui lòng chọn trạm và thời gian.");
       return;
     }
-
     try {
       setBookingSubmitting(true);
-      // Backend yêu cầu bookingTime kiểu ISO UTC
+      // Backend yêu cầu bookingTime kiểu ISO UTC, ví dụ: 2025-10-25T03:06:16.862Z
       const isoUtc = dayjs(bookingTime).utc().toISOString();
 
-      const res = await api.post(
-        `/api/booking/${bookingStationId}/bookings`,
-        null,
-        {
-          params: { bookingTime: isoUtc },
-        }
-      );
+      await api.post(`/api/booking/${bookingStationId}/bookings`, null, {
+        params: { bookingTime: isoUtc },
+      });
 
-      if (res.status === 200) {
-        toast.success("Đặt lịch thành công!");
-        setBookingOpen(false);
-      } else {
-        toast.error(
-          "Đặt lịch thất bại, không thể đặt lịch ở trạm không có pin đầy."
-        );
-      }
+      message.success("Đặt lịch thành công!");
+      setBookingOpen(false);
     } catch (e) {
       console.error(e);
-      toast.error(
-        e?.response?.data?.message ||
-          "Đặt lịch thất bại, không thể đặt lịch ở trạm không có pin đầy."
+      message.error(
+        e?.response?.data?.message || "Đặt lịch thất bại, thử lại sau."
       );
     } finally {
       setBookingSubmitting(false);
@@ -627,6 +654,19 @@ const FindStation = () => {
   const disablePast = (current) => {
     return current && current < dayjs().subtract(1, "minute");
   };
+
+  // helper format VND
+  const vnd = (n) =>
+    typeof n === "number"
+      ? new Intl.NumberFormat("vi-VN", {
+          style: "currency",
+          currency: "VND",
+          maximumFractionDigits: 0,
+        }).format(n)
+      : "-";
+  //helper format gmt +7
+  const fmtVN = (iso) =>
+    iso ? dayjs(iso).add(7, "hour").format("DD/MM/YYYY HH:mm") : "-";
 
   return (
     <Content style={{ padding: "24px 50px" }}>
@@ -716,11 +756,93 @@ const FindStation = () => {
               </Row>
             </Card>
 
+            {/* ==== GÓI ĐÃ ĐĂNG KÝ ==== */}
             <Card
               bordered={false}
               bodyStyle={{ borderLeft: "4px solid #1890ff", paddingLeft: 20 }}
             >
-              <Title level={5}>Gói đã đăng ký</Title>
+              <Title level={5} style={{ marginBottom: 12 }}>
+                Gói đã đăng ký
+              </Title>
+
+              {planLoading ? (
+                <Spin />
+              ) : activePlan && activeSub ? (
+                <div>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {activePlan.name}
+                  </Text>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 8,
+                    }}
+                  >
+                    <div>
+                      <Text type="secondary">Giá gói</Text>
+                      <div>{vnd(activePlan.price)}</div>
+                    </div>
+                    <div>
+                      <Text type="secondary">Thời hạn</Text>
+                      <div>{activePlan.durationDays ?? "-"} ngày</div>
+                    </div>
+                    <div>
+                      <Text type="secondary">Ngày bắt đầu</Text>
+                      <div>{fmtVN(activeSub.startDate)}</div>
+                    </div>
+
+                    <div>
+                      <Text type="secondary">Ngày kết thúc</Text>
+                      <div>{fmtVN(activeSub.endDate)}</div>
+                    </div>
+                    <div>
+                      <Text type="secondary">Số lượt đổi</Text>
+                      <div>{activePlan.swapLimit ?? "-"}</div>
+                    </div>
+
+                    <div>
+                      <Text type="secondary">Đã sử dụng</Text>
+                      <div>{activeSub.swapsUsed ?? 0}</div>
+                    </div>
+
+                    <div>
+                      <Text type="secondary">Giá mỗi lần đổi</Text>
+                      <div>{vnd(activePlan.pricePerSwap)}</div>
+                    </div>
+
+                    <div>
+                      <Text type="secondary">Giá cho lượt vượt</Text>
+                      <div>{vnd(activePlan.pricePerExtraSwap)}</div>
+                    </div>
+
+                    <div>
+                      <Text type="secondary">Trạng thái</Text>
+                      <div>
+                        <Tag color={activeSub.active ? "green" : "red"}>
+                          {activeSub.active
+                            ? "Đang hoạt động"
+                            : activeSub.status || "Hết hiệu lực"}
+                        </Tag>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ marginBottom: 8 }}>
+                    {planError ? (
+                      <Text>{planError}</Text>
+                    ) : (
+                      <Text>Bạn chưa đăng ký gói nào.</Text>
+                    )}
+                  </div>
+                  <Button type="primary" onClick={() => navigate("/plans")}>
+                    Đăng ký ngay
+                  </Button>
+                </div>
+              )}
             </Card>
 
             <Card
@@ -812,7 +934,6 @@ const FindStation = () => {
               value={bookingTime}
               onChange={setBookingTime}
               disabledDate={disablePast}
-              // để FE nhìn thấy theo local, nhưng gửi lên luôn ISO UTC:
               format="YYYY-MM-DD HH:mm"
             />
           </div>

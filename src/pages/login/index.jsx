@@ -1,17 +1,6 @@
 import React, { useState } from "react";
-import {
-  Form,
-  Input,
-  Button,
-  Card,
-  Divider,
-  Row,
-  Col,
-  Spin,
-  message,
-} from "antd";
+import { Form, Input, Button, Card, Divider, Row, Col, Spin } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
-import { FaGoogle } from "react-icons/fa";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
 import { useNavigate } from "react-router-dom";
@@ -153,18 +142,6 @@ const LoginPage = () => {
               </Button>
             </Form.Item>
 
-            <Divider>Hoặc tiếp tục với</Divider>
-
-            <div>
-              <Button
-                type="default"
-                block
-                icon={<FaGoogle />}
-                onClick={() => message.info("Google OAuth not implemented")}
-              >
-                Google
-              </Button>
-            </div>
             <Divider />
             <div className="text-center">
               Chưa có tài khoản?{" "}

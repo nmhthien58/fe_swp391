@@ -16,6 +16,7 @@
     "antd": "^5.27.5",
     "axios": "^1.12.1",
     "dayjs": "^1.11.18",
+    "dayjs-timezone-iana-plugin": "^0.2.0",
     "leaflet": "^1.9.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
