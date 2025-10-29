@@ -15,8 +15,13 @@ import {
   Modal,
   Select,
   DatePicker,
+  Tooltip,
 } from "antd";
-import { SearchOutlined, LoadingOutlined } from "@ant-design/icons";
+import {
+  SearchOutlined,
+  LoadingOutlined,
+  CalendarOutlined,
+} from "@ant-design/icons";
 import { renderToString } from "react-dom/server";
 import { BsEvStationFill } from "react-icons/bs";
 import api from "../../config/axios";
@@ -30,6 +35,7 @@ import "@goongmaps/goong-js/dist/goong-js.css";
 
 import { haversineMeters, metersToKmText } from "../../components/map/mapUtils";
 import { toast } from "react-toastify";
+import { IoLocationOutline } from "react-icons/io5";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -343,38 +349,71 @@ const FindStation = () => {
     map.fitBounds(bounds, { padding: 80, duration: 500 });
   };
 
+  // Thay toàn bộ hàm renderStationMarkers bằng phiên bản có nút đặt lịch trong popup
   const renderStationMarkers = () => {
     const map = mapRef.current;
     if (!map) return;
+
+    // dọn các marker cũ
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
+
     mapStations.forEach((st) => {
       const { latitude: lat, longitude: lng } = st || {};
       if (typeof lat !== "number" || typeof lng !== "number") return;
+
+      // DOM icon
       const el = document.createElement("div");
       el.innerHTML = stationMarkerHtml;
       el.style.transform = "translate(-50%, -50%)";
-      const marker = new goongjs.Marker(el).setLngLat([lng, lat]).addTo(map);
-      const html = `
-        <div style="min-width:220px">
-          <b>${st.name ?? "Trạm"}</b><br/>
-          ${st.address ?? ""}<br/>
-Số pin đầy: ${
-        (st?.batteries || []).filter((b) => b.status === "FULL").length
-      }<br/>
-          ${
-            nearest?.stationId === st.stationId && nearest?.__distance != null
-              ? `<span>Gần bạn nhất: ${metersToKmText(
-                  nearest.__distance
-                )}</span>`
-              : ""
-          }
-        </div>`;
-      const popup = new goongjs.Popup({ offset: 16 }).setHTML(html);
-      marker.setPopup(popup);
+
+      // HTML popup có nút Đặt lịch
+      const popupHtml = `
+      <div style="min-width:240px">
+        <b>${st.name ?? "Trạm"}</b><br/>
+        ${st.address ?? ""}<br/>
+        Số pin đầy: ${
+          (st?.batteries || []).filter((b) => b.status === "FULL").length
+        }<br/>
+        ${
+          nearest?.stationId === st.stationId && nearest?.__distance != null
+            ? `<span>Gần bạn nhất: ${metersToKmText(
+                nearest.__distance
+              )}</span><br/>`
+            : ""
+        }
+        <div style="margin-top:8px">
+          <button id="book-${st.stationId}"
+                  style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:0;border-radius:6px;background:#1677ff;color:#fff;cursor:pointer;">
+            <svg viewBox="64 64 896 896" focusable="false" data-icon="calendar" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M880 184H792V104a8 8 0 00-8-8h-48a8 8 0 00-8 8v80H296V104a8 8 0 00-8-8h-48a8 8 0 00-8 8v80H144c-17.7 0-32 14.3-32 32v624c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V216c0-17.7-14.3-32-32-32zm-40 616H184V376h656v424z"></path></svg>
+            Đặt lịch tại trạm này
+          </button>
+        </div>
+      </div>
+    `;
+
+      const popup = new goongjs.Popup({ offset: 16 }).setHTML(popupHtml);
+
+      // bind click cho nút sau khi popup mở
+      popup.on("open", () => {
+        const btn = document.getElementById(`book-${st.stationId}`);
+        if (btn) {
+          btn.onclick = (e) => {
+            e.preventDefault();
+            // dùng hàm đã có sẵn để mở modal và set stationId
+            openBookingForStation(st.stationId);
+          };
+        }
+      });
+
+      const marker = new goongjs.Marker(el)
+        .setLngLat([lng, lat])
+        .setPopup(popup)
+        .addTo(map);
       markersRef.current.push(marker);
     });
 
+    // fit bounds lần đầu khi chưa có userPos/nearest
     const pts = mapStations
       .filter(
         (s) => typeof s.latitude === "number" && typeof s.longitude === "number"
@@ -527,7 +566,7 @@ Số pin đầy: ${
     }
   };
 
-  // ==== Booking modal handlers ====
+  // ==== Booking handlers ====
   const openBookingModal = () => {
     // mặc định chọn trạm gần nhất nếu đã có, nếu không chọn trạm đầu tiên
     const defaultStationId =
@@ -536,6 +575,13 @@ Số pin đầy: ${
         ?.stationId ??
       null;
     setBookingStationId(defaultStationId);
+    setBookingTime(dayjs().add(30, "minute").second(0).millisecond(0));
+    setBookingOpen(true);
+  };
+
+  // NEW: mở modal với station được chọn từ icon calendar ở cột phải
+  const openBookingForStation = (stationId) => {
+    setBookingStationId(stationId);
     setBookingTime(dayjs().add(30, "minute").second(0).millisecond(0));
     setBookingOpen(true);
   };
@@ -563,12 +609,15 @@ Số pin đầy: ${
         toast.success("Đặt lịch thành công!");
         setBookingOpen(false);
       } else {
-        toast.error("Đặt lịch thất bại, thử lại sau.");
+        toast.error(
+          "Đặt lịch thất bại, không thể đặt lịch ở trạm không có pin đầy."
+        );
       }
     } catch (e) {
       console.error(e);
       toast.error(
-        e?.response?.data?.message || "Đặt lịch thất bại, thử lại sau."
+        e?.response?.data?.message ||
+          "Đặt lịch thất bại, không thể đặt lịch ở trạm không có pin đầy."
       );
     } finally {
       setBookingSubmitting(false);
@@ -618,10 +667,26 @@ Số pin đầy: ${
                 type="primary"
                 loading={locating}
                 onClick={handleFindNearest}
+                size="large"
+                style={{
+                  fontSize: 16,
+                }}
               >
+                <IoLocationOutline />
                 {locating ? "Đang định vị..." : "Tìm trạm gần nhất"}
               </Button>
-              <Button onClick={openBookingModal}>Đặt lịch đổi pin</Button>
+              <Button
+                type="primary"
+                onClick={openBookingModal}
+                size="large"
+                style={{
+                  backgroundColor: "green",
+                  fontSize: 16,
+                }}
+              >
+                <CalendarOutlined />
+                Đặt lịch đổi pin
+              </Button>
             </Space>
 
             <div
@@ -672,7 +737,19 @@ Số pin đầy: ${
                   dataSource={initialStations}
                   locale={{ emptyText: "Không có trạm" }}
                   renderItem={(st) => (
-                    <List.Item key={st.stationId}>
+                    <List.Item
+                      key={st.stationId}
+                      // NEW: icon calendar đặt ở bên phải item
+                      actions={[
+                        <Tooltip title="Đặt lịch tại trạm này" key="calendar">
+                          <Button
+                            type="text"
+                            icon={<CalendarOutlined />}
+                            onClick={() => openBookingForStation(st.stationId)}
+                          />
+                        </Tooltip>,
+                      ]}
+                    >
                       <div style={{ width: "100%" }}>
                         <Text strong>{st.name}</Text>
                         <br />
@@ -738,10 +815,6 @@ Số pin đầy: ${
               // để FE nhìn thấy theo local, nhưng gửi lên luôn ISO UTC:
               format="YYYY-MM-DD HH:mm"
             />
-            {/* <div style={{ marginTop: 6, color: "#888" }}>
-              Sẽ gửi lên server:{" "}
-              <code>{dayjs(bookingTime).utc().toISOString()}</code>
-            </div> */}
           </div>
         </Space>
       </Modal>
