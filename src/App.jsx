@@ -28,6 +28,7 @@ import Home from "./pages/homepage/index.jsx";
 import { useSelector } from "react-redux";
 import { selectToken } from "./redux/accountSlice.js";
 import TestVerify from "./pages/test/test-verify.jsx";
+import PlanHistory from "./pages/subcription-history/index.jsx";
 function RootRedirect() {
   const token = useSelector(selectToken);
   return token ? (
@@ -107,8 +108,22 @@ function App() {
         },
         {
           path: "/history",
-          element: <TransHistory />,
+          children: [
+            {
+              index: true,
+              element: <Navigate to="/history/swap" replace />,
+            },
+            {
+              path: "swap",
+              element: <TransHistory />,
+            },
+            {
+              path: "plans",
+              element: <PlanHistory />,
+            },
+          ],
         },
+
         {
           path: "/support",
           element: <Support />,

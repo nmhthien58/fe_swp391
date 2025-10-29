@@ -61,6 +61,8 @@ export default function AppLayout() {
 
   const keyByPath = (path) => {
     if (path.startsWith("/stations")) return "tim-tram";
+    if (path.startsWith("/history/swap")) return "lich-su";
+    if (path.startsWith("/history/plans")) return "lich-su";
     if (path.startsWith("/history")) return "lich-su";
     if (path.startsWith("/support")) return "ho-tro";
     if (path.startsWith("/account")) return "tai-khoan";
@@ -122,9 +124,28 @@ export default function AppLayout() {
           key: "tim-tram",
           label: <NavLink to="/stations">Tìm Trạm & Đặt Lịch</NavLink>,
         },
-        { key: "plans", label: <NavLink to="/plans">Gói đăng ký</NavLink> },
-        { key: "lich-su", label: <NavLink to="/history">Lịch Sử</NavLink> },
-        { key: "ho-tro", label: <NavLink to="/support">Hỗ Trợ</NavLink> },
+        {
+          key: "plans",
+          label: <NavLink to="/plans">Gói đăng ký</NavLink>,
+        },
+        {
+          key: "lich-su",
+          label: "Lịch Sử",
+          children: [
+            {
+              key: "lich-su-doi-pin",
+              label: <NavLink to="/history/swap">Lịch sử đổi pin</NavLink>,
+            },
+            {
+              key: "lich-su-dang-ky-goi",
+              label: <NavLink to="/history/plans">Lịch sử đăng ký gói</NavLink>,
+            },
+          ],
+        },
+        {
+          key: "ho-tro",
+          label: <NavLink to="/support">Hỗ Trợ</NavLink>,
+        },
       ];
 
   const selectedMenuKey = !token ? "home" : keyByPath(location.pathname);
