@@ -16,8 +16,9 @@ const LoginPage = () => {
     setIsLoading(true);
     try {
       // 1) Đăng nhập -> token
-      const response = await api.post("/auth/login", null, {
-        params: { userName: values.userName, password: values.password },
+      const response = await api.post("/auth/login", {
+        userName: values.userName,
+        password: values.password,
       });
       const token = response?.data?.result?.token;
       const refreshToken = response?.data?.result?.refreshToken;
@@ -36,14 +37,14 @@ const LoginPage = () => {
       const profile = me?.data?.result;
       dispatch(setUser(profile));
 
-      // 3) Điều hướng theo role ở client (không cần gọi /api/getDrivers)
+      // 3) Điều hướng theo role ở client
       const role = profile?.roles?.[0]?.userType;
       if (role === "ADMIN") {
         navigate("/dashboard");
       } else if (role === "STAFF") {
         navigate("/staff");
       } else {
-        // DRIVER hoặc không xác định
+        // Role DRIVER
         navigate("/");
       }
 

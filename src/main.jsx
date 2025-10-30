@@ -1,4 +1,8 @@
 // src/main.jsx
+if (typeof window !== "undefined" && typeof window.global === "undefined") {
+  window.global = window;
+}
+
 import React from "react";
 import { createRoot } from "react-dom/client";
 

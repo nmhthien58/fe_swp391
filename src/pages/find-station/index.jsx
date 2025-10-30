@@ -28,6 +28,7 @@ import { BsEvStationFill } from "react-icons/bs";
 import api from "../../config/axios";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+
 dayjs.extend(utc);
 
 // ==== Goong JS (vector maps) ====
@@ -41,6 +42,7 @@ import { useSelector } from "react-redux";
 import { selectUser } from "../../redux/accountSlice";
 import { useNavigate } from "react-router-dom";
 import { IoLocationOutline } from "react-icons/io5";
+import { toast } from "react-toastify";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -635,22 +637,41 @@ const FindStation = () => {
       message.warning("Vui lòng chọn trạm và thời gian.");
       return;
     }
+    if (!driverId) {
+      message.error("Thiếu driverId. Hãy đăng nhập lại tài khoản tài xế.");
+      return;
+    }
+
     try {
       setBookingSubmitting(true);
-      // Backend yêu cầu bookingTime kiểu ISO UTC, ví dụ: 2025-10-25T03:06:16.862Z
+
+      // Ví dụ Swagger: 2025-10-31T07:48:13.893Z
       const isoUtc = dayjs(bookingTime).utc().toISOString();
 
-      await api.post(`/api/booking/${bookingStationId}/bookings`, null, {
-        params: { bookingTime: isoUtc },
-      });
+      // driverId & bookingTime là query params
+      const res = await api.post(
+        `/api/booking/${bookingStationId}/bookings`,
+        null,
+        { params: { driverId, bookingTime: isoUtc } }
+      );
 
-      message.success("Đặt lịch thành công!");
+      // (Bearer token sẽ được interceptor gắn vào header Authorization)
+      const data = res?.data;
+      toast.success("Đặt lịch thành công!");
+      // Nếu muốn hiển thị thêm thông tin trả về:
+      message.success(`Đặt lịch #${data?.bookingId} lúc ${data?.bookingTime}`);
+
       setBookingOpen(false);
     } catch (e) {
       console.error(e);
-      message.error(
-        e?.response?.data?.message || "Đặt lịch thất bại, thử lại sau."
-      );
+      if (e?.response?.status === 401) {
+        message.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+        // navigate("/login"); // nếu muốn chuyển sang trang đăng nhập
+      } else {
+        toast.error(
+          e?.response?.data?.message || "Đặt lịch thất bại, thử lại sau."
+        );
+      }
     } finally {
       setBookingSubmitting(false);
     }

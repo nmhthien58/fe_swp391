@@ -12,6 +12,7 @@
   "dependencies": {
     "@goongmaps/goong-js": "^1.0.9",
     "@reduxjs/toolkit": "^2.9.1",
+    "@stomp/stompjs": "^7.2.1",
     "@tailwindcss/vite": "^4.1.13",
     "antd": "^5.27.5",
     "axios": "^1.12.1",
@@ -27,6 +28,7 @@
     "react-toastify": "^11.0.5",
     "recharts": "^3.2.1",
     "redux-persist": "^6.0.0",
+    "sockjs-client": "^1.6.1",
     "tailwindcss": "^4.1.13"
   },
   "devDependencies": {
