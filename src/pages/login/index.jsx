@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 import { Form, Input, Button, Card, Divider, Row, Col, Spin } from "antd";
-import { LockOutlined, UserOutlined } from "@ant-design/icons";
+import {
+  LockOutlined,
+  UserOutlined,
+  ThunderboltOutlined,
+} from "@ant-design/icons";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
 import { useNavigate } from "react-router-dom";
@@ -12,10 +16,10 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
   const onFinish = async (values) => {
     setIsLoading(true);
     try {
-      // 1) Đăng nhập -> token
       const response = await api.post("/auth/login", {
         userName: values.userName,
         password: values.password,
@@ -27,24 +31,19 @@ const LoginPage = () => {
         return;
       }
 
-      // (Khuyên dùng Redux Persist thay cho localStorage thủ công)
       localStorage.setItem("token", token);
-
       dispatch(setCredentials({ token, refreshToken }));
 
-      // 2) Lấy hồ sơ -> role
       const me = await api.get("/api/myInfo");
       const profile = me?.data?.result;
       dispatch(setUser(profile));
 
-      // 3) Điều hướng theo role ở client
       const role = profile?.roles?.[0]?.userType;
       if (role === "ADMIN") {
         navigate("/dashboard");
       } else if (role === "STAFF") {
         navigate("/staff");
       } else {
-        // Role DRIVER
         navigate("/");
       }
 
@@ -63,15 +62,15 @@ const LoginPage = () => {
 
   return (
     <div
-      className="flex justify-center"
       style={{
-        background: "#f0f2f5",
-        alignItems: "flex-start",
-        paddingTop: 100,
-        paddingBottom: 120, // chừa khoảng nhỏ dưới cho đẹp
+        minHeight: "calc(100vh - 280px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "60px 20px",
       }}
     >
-      {/* 🔹 Overlay loading toàn trang */}
+      {/* Loading Overlay */}
       {isLoading && (
         <div
           style={{
@@ -80,24 +79,74 @@ const LoginPage = () => {
             left: 0,
             width: "100vw",
             height: "100vh",
-            backgroundColor: "rgba(255,255,255,0.7)",
+            backgroundColor: "rgba(255,255,255,0.85)",
+            backdropFilter: "blur(4px)",
             zIndex: 9999,
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
           }}
         >
-          <Spin size="large" tip="Đang đăng nhập..." />
+          <div style={{ textAlign: "center" }}>
+            <Spin size="large" />
+            <div
+              style={{
+                marginTop: 16,
+                fontSize: 16,
+                color: "#1890ff",
+                fontWeight: 500,
+              }}
+            >
+              Đang đăng nhập...
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="relative z-10 w-full max-w-lg mx-4">
-        <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
-          <div className="text-center mb-4">
-            <h2 className="text-2xl font-bold">Đăng nhập</h2>
-            <p className="text-gray-500">Chào mừng bạn trở lại</p>
+      <div style={{ width: "100%", maxWidth: 480 }}>
+        <Card
+          style={{
+            borderRadius: 20,
+            boxShadow: "0 8px 32px rgba(24, 144, 255, 0.12)",
+            border: "1px solid rgba(24, 144, 255, 0.08)",
+          }}
+          bodyStyle={{ padding: "48px 40px" }}
+        >
+          {/* Logo & Title */}
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                margin: "0 auto 20px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 8px 24px rgba(24, 144, 255, 0.3)",
+              }}
+            >
+              <ThunderboltOutlined style={{ color: "#fff", fontSize: 32 }} />
+            </div>
+            <h2
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                margin: "0 0 8px 0",
+                background: "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              Đăng nhập
+            </h2>
+            <p style={{ color: "#8c8c8c", fontSize: 15, margin: 0 }}>
+              Chào mừng bạn trở lại với EV Battery Swap Station
+            </p>
           </div>
 
+          {/* Form */}
           <Form
             form={form}
             layout="vertical"
@@ -105,54 +154,136 @@ const LoginPage = () => {
             requiredMark={false}
           >
             <Form.Item
-              label="Tài khoản"
+              label={<span style={{ fontWeight: 500 }}>Tài khoản</span>}
               name="userName"
-              rules={[{ required: true, message: "Cần điền tài khoản!" }]}
+              rules={[{ required: true, message: "Vui lòng nhập tài khoản!" }]}
             >
               <Input
-                placeholder="Điền tài khoản của bạn"
-                prefix={<UserOutlined />}
+                placeholder="Nhập tên tài khoản"
+                prefix={<UserOutlined style={{ color: "#bfbfbf" }} />}
+                size="large"
+                style={{ borderRadius: 10 }}
               />
             </Form.Item>
 
             <Form.Item
-              label="Mật khẩu"
+              label={<span style={{ fontWeight: 500 }}>Mật khẩu</span>}
               name="password"
               rules={[
-                { required: true, message: "Cần nhập mật khẩu!" },
+                { required: true, message: "Vui lòng nhập mật khẩu!" },
                 { min: 4, message: "Mật khẩu phải có ít nhất 4 ký tự" },
               ]}
             >
               <Input.Password
-                placeholder="Enter password"
-                prefix={<LockOutlined />}
+                placeholder="Nhập mật khẩu"
+                prefix={<LockOutlined style={{ color: "#bfbfbf" }} />}
+                size="large"
+                style={{ borderRadius: 10 }}
               />
             </Form.Item>
 
-            <Row justify="space-between" align="middle">
+            <Row
+              justify="space-between"
+              align="middle"
+              style={{ marginBottom: 24 }}
+            >
               <Col>
-                <a href="#" onClick={(e) => e.preventDefault()}>
+                <a
+                  href="#"
+                  onClick={(e) => e.preventDefault()}
+                  style={{
+                    color: "#1890ff",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    transition: "all 0.3s ease",
+                  }}
+                  className="forgot-password-link"
+                >
                   Quên mật khẩu?
                 </a>
               </Col>
             </Row>
 
-            <Form.Item style={{ marginTop: 8 }}>
-              <Button type="primary" htmlType="submit" block size="large">
+            <Form.Item style={{ marginBottom: 16 }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                block
+                size="large"
+                className="login-submit-btn"
+                style={{
+                  height: 48,
+                  borderRadius: 10,
+                  fontWeight: 600,
+                  fontSize: 16,
+                  boxShadow: "0 4px 12px rgba(24, 144, 255, 0.3)",
+                  transition: "all 0.3s ease",
+                }}
+              >
                 Đăng nhập
               </Button>
             </Form.Item>
 
-            <Divider />
-            <div className="text-center">
+            <Divider style={{ margin: "24px 0", borderColor: "#f0f0f0" }} />
+
+            <div
+              style={{ textAlign: "center", fontSize: 14, color: "#595959" }}
+            >
               Chưa có tài khoản?{" "}
-              <a href="/register" className="text-blue-600 hover:text-blue-500">
-                Đăng ký ở đây
+              <a
+                href="/register"
+                style={{
+                  color: "#1890ff",
+                  fontWeight: 600,
+                  transition: "all 0.3s ease",
+                }}
+                className="register-link"
+              >
+                Đăng ký ngay
               </a>
             </div>
           </Form>
         </Card>
+
+        {/* Additional Info */}
+        <div
+          style={{
+            textAlign: "center",
+            marginTop: 24,
+            color: "#8c8c8c",
+            fontSize: 13,
+          }}
+        >
+          <p style={{ margin: 0 }}>
+            Bằng việc đăng nhập, bạn đồng ý với{" "}
+            <a href="#" style={{ color: "#1890ff" }}>
+              Điều khoản sử dụng
+            </a>{" "}
+            và{" "}
+            <a href="#" style={{ color: "#1890ff" }}>
+              Chính sách bảo mật
+            </a>
+          </p>
+        </div>
       </div>
+
+      {/* CSS for hover effects */}
+      <style>
+        {`
+          .login-submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(24, 144, 255, 0.4) !important;
+          }
+
+          .forgot-password-link:hover {
+            color: #096dd9 !important;
+          }
+
+          .register-link:hover {
+            color: #096dd9 !important;
+          }
+        `}
+      </style>
     </div>
   );
 };

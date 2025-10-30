@@ -13,7 +13,15 @@ import {
   Table,
   Tag,
   Empty,
+  Segmented,
+  Tooltip,
 } from "antd";
+import {
+  ReloadOutlined,
+  PlusCircleOutlined,
+  UnorderedListOutlined,
+  InfoCircleOutlined,
+} from "@ant-design/icons";
 import { useSelector } from "react-redux";
 import { selectUser } from "../../redux/accountSlice";
 import api from "../../config/axios";
@@ -21,15 +29,21 @@ import api from "../../config/axios";
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
-// ==== chỉ còn 2 loại issue như yêu cầu ====
-const ISSUE_TYPES = ["BATTERY_ISSUE", "STATION_ISSUE"];
-const CATEGORIES = ["BATTERY", "STATION", "PAYMENT", "SYSTEM", "OTHER"];
+// ==== các loại vấn đề & danh mục (dịch tiếng Việt) ====
+const ISSUE_TYPES = [
+  { value: "BATTERY_ISSUE", label: "Vấn đề về pin" },
+  { value: "STATION_ISSUE", label: "Vấn đề về trạm" },
+];
 
-// Tag màu cho status/priority
-// eslint-disable-next-line no-unused-vars
-const priorityColor = (p) =>
-  ({ LOW: "blue", NORMAL: "default", HIGH: "orange", URGENT: "red" }[p] ||
-  "default");
+const CATEGORY_MAP = {
+  BATTERY: "Pin",
+  STATION: "Trạm",
+  PAYMENT: "Thanh toán",
+  SYSTEM: "Hệ thống",
+  OTHER: "Khác",
+};
+
+const CATEGORIES = Object.keys(CATEGORY_MAP);
 
 const statusColor = (s) =>
   ({
@@ -42,18 +56,18 @@ const statusColor = (s) =>
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : "");
 
+const glassCard = {
+  borderRadius: 12,
+  boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
+};
+
 const Support = () => {
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
-
-  // UI mode: 'create' | 'list'
-  const [mode, setMode] = useState("create");
-
-  // tickets state
+  const [mode, setMode] = useState("create"); // 'create' | 'list'
   const [tickets, setTickets] = useState([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
 
-  // Lấy driverId từ Redux
   const user = useSelector(selectUser);
   const driverId = useMemo(() => {
     if (user?.driverId) return user.driverId;
@@ -62,7 +76,7 @@ const Support = () => {
     return undefined;
   }, [user]);
 
-  // Submit tạo ticket
+  // === Gửi ticket ===
   const onFinish = async (values) => {
     if (!driverId) {
       message.error("Không tìm thấy driverId trong phiên đăng nhập.");
@@ -70,7 +84,14 @@ const Support = () => {
     }
     setSubmitting(true);
     try {
-      await api.post(`/api/support/create`, values, { params: { driverId } });
+      const payload = {
+        ...values,
+        issueType: values.issuetype,
+        priority: values.priority ?? "LOW",
+      };
+      delete payload.issuetype;
+
+      await api.post(`/api/support/create`, payload, { params: { driverId } });
       message.success("Gửi ticket thành công!");
       form.resetFields();
       setMode("list");
@@ -85,7 +106,7 @@ const Support = () => {
     }
   };
 
-  // Load tickets của tôi
+  // === Lấy danh sách ticket ===
   const fetchMyTickets = async () => {
     if (!driverId) {
       message.error("Không tìm thấy driverId trong phiên đăng nhập.");
@@ -111,65 +132,76 @@ const Support = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, driverId]);
 
-  // Bảng tickets
+  // === Cột bảng ===
   const columns = [
-    { title: "Ticket ID", dataIndex: "ticketId", key: "ticketId", width: 110 },
+    { title: "Ticket ID", dataIndex: "ticketId", key: "ticketId", width: 100 },
     {
       title: "Station ID",
       dataIndex: "stationId",
       key: "stationId",
-      width: 110,
+      width: 100,
+      render: (v) => v ?? "—",
     },
     {
-      title: "Issue Type",
+      title: "Loại vấn đề",
       dataIndex: "issueType",
       key: "issueType",
-      render: (v) => <Tag>{v}</Tag>,
+      width: 160,
+      render: (v) => {
+        if (v === "BATTERY_ISSUE") return <Tag color="blue">Vấn đề về pin</Tag>;
+        if (v === "STATION_ISSUE")
+          return <Tag color="orange">Vấn đề về trạm</Tag>;
+        return <Tag>{v}</Tag>;
+      },
     },
     {
-      title: "Category",
+      title: "Danh mục",
       dataIndex: "category",
       key: "category",
-      render: (v) => <Tag>{v ?? "—"}</Tag>,
+      width: 140,
+      render: (v) => <Tag color="geekblue">{CATEGORY_MAP[v] || v || "—"}</Tag>,
     },
-    // {
-    //   title: "Priority",
-    //   dataIndex: "priority",
-    //   key: "priority",
-    //   render: (v) => <Tag color={priorityColor(v)}>{v}</Tag>,
-    // },
     {
-      title: "Status",
+      title: "Trạng thái",
       dataIndex: "status",
       key: "status",
+      width: 140,
       render: (v) => <Tag color={statusColor(v)}>{v}</Tag>,
     },
     {
-      title: "Description",
+      title: "Mô tả",
       dataIndex: "description",
       key: "description",
       ellipsis: true,
     },
     {
-      title: "Created At",
+      title: "Tạo lúc",
       dataIndex: "createdAt",
       key: "createdAt",
       render: fmt,
+      width: 180,
     },
     {
-      title: "Resolved At",
+      title: "Hoàn thành lúc",
       dataIndex: "resolvedAt",
       key: "resolvedAt",
       render: fmt,
+      width: 180,
     },
   ];
 
   return (
-    <Card>
-      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      {/* Header */}
+      <Card bordered={false} style={glassCard} bodyStyle={{ padding: 16 }}>
         <Space
           align="center"
-          style={{ justifyContent: "space-between", width: "100%" }}
+          style={{
+            justifyContent: "space-between",
+            width: "100%",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
         >
           <div>
             <Title level={4} style={{ margin: 0 }}>
@@ -181,35 +213,50 @@ const Support = () => {
           </div>
 
           <Space>
-            <Button
-              type={mode === "create" ? "primary" : "default"}
-              onClick={() => setMode("create")}
-            >
-              Tạo ticket
-            </Button>
-            <Button
-              type={mode === "list" ? "primary" : "default"}
-              onClick={() => setMode("list")}
-            >
-              Ticket của tôi
-            </Button>
+            <Segmented
+              size="large"
+              value={mode}
+              onChange={setMode}
+              options={[
+                {
+                  label: "Tạo ticket",
+                  value: "create",
+                  icon: <PlusCircleOutlined />,
+                },
+                {
+                  label: "Ticket của tôi",
+                  value: "list",
+                  icon: <UnorderedListOutlined />,
+                },
+              ]}
+            />
+            {mode === "list" && (
+              <Tooltip title="Tải lại danh sách">
+                <Button icon={<ReloadOutlined />} onClick={fetchMyTickets} />
+              </Tooltip>
+            )}
+            <Tooltip title="BATTERY_ISSUE = Vấn đề về pin, STATION_ISSUE = Vấn đề về trạm">
+              <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+            </Tooltip>
           </Space>
         </Space>
+      </Card>
 
-        {mode === "create" ? (
+      {/* Nội dung */}
+      {mode === "create" ? (
+        <Card bordered={false} style={glassCard} bodyStyle={{ padding: 16 }}>
           <Form
             form={form}
             layout="vertical"
             onFinish={onFinish}
             initialValues={{
-              // priority mặc định LOW và ẩn
               priority: "LOW",
               issuetype: "BATTERY_ISSUE",
               category: "BATTERY",
             }}
           >
-            {/* Trường priority ẩn nhưng vẫn submit lên API */}
-            <Form.Item name="priority" initialValue="LOW" hidden>
+            {/* priority ẩn */}
+            <Form.Item name="priority" hidden>
               <Input />
             </Form.Item>
 
@@ -223,23 +270,28 @@ const Support = () => {
 
             <Form.Item
               name="issuetype"
-              label="Issue Type"
-              rules={[{ required: true, message: "Vui lòng chọn Issue Type" }]}
+              label="Loại vấn đề"
+              rules={[{ required: true, message: "Vui lòng chọn loại vấn đề" }]}
             >
               <Select
                 allowClear
-                options={ISSUE_TYPES.map((v) => ({ value: v, label: v }))}
+                options={ISSUE_TYPES}
+                placeholder="Chọn loại vấn đề"
               />
             </Form.Item>
 
             <Form.Item
               name="category"
-              label="Category"
-              rules={[{ required: true, message: "Vui lòng chọn Category" }]}
+              label="Danh mục"
+              rules={[{ required: true, message: "Vui lòng chọn danh mục" }]}
             >
               <Select
                 allowClear
-                options={CATEGORIES.map((v) => ({ value: v, label: v }))}
+                placeholder="Chọn danh mục"
+                options={CATEGORIES.map((v) => ({
+                  value: v,
+                  label: CATEGORY_MAP[v],
+                }))}
               />
             </Form.Item>
 
@@ -251,33 +303,52 @@ const Support = () => {
               <TextArea rows={4} placeholder="Mô tả sự cố bạn gặp phải..." />
             </Form.Item>
 
-            <Form.Item>
-              <Space>
-                <Button type="primary" htmlType="submit" loading={submitting}>
-                  Gửi ticket
-                </Button>
-                <Button
-                  htmlType="button"
-                  onClick={() => form.resetFields()}
-                  disabled={submitting}
-                >
-                  Xoá form
-                </Button>
-              </Space>
-            </Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={submitting}>
+                Gửi ticket
+              </Button>
+              <Button
+                htmlType="button"
+                onClick={() => form.resetFields()}
+                disabled={submitting}
+              >
+                Xoá form
+              </Button>
+            </Space>
           </Form>
-        ) : (
+
+          {/* <div
+            style={{
+              marginTop: 16,
+              background: "#f6ffed",
+              border: "1px solid #b7eb8f",
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <Text type="secondary">
+              <b>Vấn đề về pin:</b> Các sự cố liên quan đến đổi pin, sạc pin,
+              pin lỗi, v.v. <br />
+              <b>Vấn đề về trạm:</b> Các sự cố liên quan đến trạm, thiết bị hoặc
+              nhân viên trạm.
+            </Text>
+          </div> */}
+        </Card>
+      ) : (
+        <Card bordered={false} style={glassCard} bodyStyle={{ padding: 16 }}>
           <Table
             rowKey="ticketId"
             loading={loadingTickets}
             dataSource={tickets}
             columns={columns}
             pagination={{ pageSize: 8, showSizeChanger: true }}
+            scroll={{ x: 950 }}
             locale={{ emptyText: <Empty description="Chưa có ticket nào" /> }}
+            size="middle"
           />
-        )}
-      </Space>
-    </Card>
+        </Card>
+      )}
+    </Space>
   );
 };
 

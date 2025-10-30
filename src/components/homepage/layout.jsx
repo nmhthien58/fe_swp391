@@ -16,6 +16,7 @@ import {
   MailOutlined,
   UserOutlined,
   ThunderboltOutlined,
+  DownOutlined,
 } from "@ant-design/icons";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { FaFacebook, FaYoutube } from "react-icons/fa";
@@ -87,11 +88,13 @@ export default function AppLayout() {
         key: "profile-head",
         disabled: true,
         label: (
-          <div>
-            <strong style={{ display: "block", fontSize: 14 }}>
+          <div style={{ padding: "8px 0" }}>
+            <strong
+              style={{ display: "block", fontSize: 15, color: "#262626" }}
+            >
               {user?.fullName}
             </strong>
-            <span style={{ fontSize: 12, color: "#999" }}>
+            <span style={{ fontSize: 13, color: "#8c8c8c" }}>
               {(user?.roles && user?.roles[0]?.userType) || "USER"}
             </span>
           </div>
@@ -106,7 +109,7 @@ export default function AppLayout() {
         key: "logout",
         label: (
           <span
-            style={{ color: "red", fontWeight: 600 }}
+            style={{ color: "#ff4d4f", fontWeight: 600 }}
             onClick={handleLogout}
           >
             Đăng xuất
@@ -116,7 +119,6 @@ export default function AppLayout() {
     ],
   };
 
-  // === Menu hiển thị theo token ===
   const menuItems = !token
     ? [{ key: "home", label: <NavLink to="/home">Trang chủ</NavLink> }]
     : [
@@ -151,244 +153,470 @@ export default function AppLayout() {
   const selectedMenuKey = !token ? "home" : keyByPath(location.pathname);
 
   return (
-    <Layout style={{ minHeight: "100vh", backgroundColor: "#f0f2f5" }}>
-      {/* ================= HEADER ================= */}
-      <Header
-        style={{
-          backgroundColor: "white",
-          padding: "0 50px",
-          borderBottom: "1px solid #e5e7eb",
-          height: 72,
-          display: "flex",
-          alignItems: "center",
-          boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
-          position: "relative", // 👈 quan trọng để menu absolute bám theo
-          overflow: "hidden",
-        }}
-      >
-        {/* Trái: Logo */}
-        <div
-          onClick={() => navigate("/")}
+    <>
+      <Layout style={{ minHeight: "100vh" }}>
+        {/* ================= HEADER ================= */}
+        <Header
+          className="app-header"
           style={{
+            backgroundColor: "white",
+            padding: "0 50px",
+            borderBottom: "1px solid #f0f0f0",
+            height: 72,
             display: "flex",
             alignItems: "center",
-            gap: 8,
-            cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            position: "sticky",
+            top: 0,
+            zIndex: 999,
+            overflow: "hidden",
           }}
         >
-          <ThunderboltOutlined
+          {/* Logo */}
+          <div
+            onClick={() => navigate("/")}
             style={{
-              color: "#186381ff",
-              fontSize: 26,
-              transform: "translateY(-1px)",
-            }}
-          />
-          <span
-            style={{
-              fontWeight: 700,
-              fontSize: 20,
-              letterSpacing: 0.2,
-              color: "#186381ff",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              cursor: "pointer",
+              transition: "all 0.3s ease",
             }}
           >
-            EV Battery Swap Station
-          </span>
-        </div>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 4px 12px rgba(24, 144, 255, 0.3)",
+                transition: "all 0.3s ease",
+              }}
+            >
+              <ThunderboltOutlined
+                style={{
+                  color: "#fff",
+                  fontSize: 22,
+                }}
+              />
+            </div>
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: 19,
+                letterSpacing: 0.3,
+                background: "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              EV Battery Swap Station
+            </span>
+          </div>
 
-        {/* Giữa: Menu — CENTER ABSOLUTE */}
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)", // căn giữa thật sự
-            pointerEvents: "auto",
-            zIndex: 1,
-          }}
-        >
-          <Menu
-            mode="horizontal"
-            selectedKeys={[selectedMenuKey]}
-            disabledOverflow
+          {/* Menu Center */}
+          <div
             style={{
-              borderBottom: "none", // bỏ border mặc định
-              fontWeight: 600,
-              fontSize: 16,
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              pointerEvents: "auto",
+              zIndex: 1,
             }}
-            items={menuItems}
-          />
-        </div>
+          >
+            <Menu
+              mode="horizontal"
+              selectedKeys={[selectedMenuKey]}
+              disabledOverflow
+              style={{
+                borderBottom: "none",
+                fontWeight: 500,
+                fontSize: 15,
+              }}
+              items={menuItems}
+            />
+          </div>
 
-        {/* Phải: Auth (đẩy về phải bằng margin-left:auto) */}
-        <div style={{ marginLeft: "auto" }}>
-          {!token ? (
-            <Space align="center">
-              <Button
-                type="primary"
-                size="middle"
-                style={{ fontWeight: 500 }}
-                onClick={() => navigate("/login")}
+          {/* Auth Buttons */}
+          <div style={{ marginLeft: "auto" }}>
+            {!token ? (
+              <Space align="center" size={12}>
+                <Button
+                  type="primary"
+                  size="middle"
+                  className="header-btn-login"
+                  style={{
+                    fontWeight: 600,
+                    height: 40,
+                    borderRadius: 6,
+                    padding: "0 24px",
+                    boxShadow: "0 2px 8px rgba(24, 144, 255, 0.3)",
+                    transition: "all 0.3s ease",
+                  }}
+                  onClick={() => navigate("/login")}
+                >
+                  Đăng nhập
+                </Button>
+                <Button
+                  size="middle"
+                  className="header-btn-register"
+                  style={{
+                    fontWeight: 600,
+                    height: 40,
+                    borderRadius: 6,
+                    padding: "0 24px",
+                    borderColor: "#1890ff",
+                    color: "#1890ff",
+                    transition: "all 0.3s ease",
+                  }}
+                  onClick={() => navigate("/register")}
+                >
+                  Đăng ký
+                </Button>
+              </Space>
+            ) : (
+              <div
+                style={{ display: "flex", alignItems: "center", height: 72 }}
               >
-                Đăng nhập
-              </Button>
-              <Button
-                size="middle"
-                style={{ fontWeight: 500 }}
-                onClick={() => navigate("/register")}
-              >
-                Đăng ký
-              </Button>
-            </Space>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", height: 72 }}>
-              {bootstrapping ? (
-                <Spin size="small" />
-              ) : (
-                <Dropdown menu={userMenu} trigger={["click"]}>
-                  <Button
-                    type="text"
+                {bootstrapping ? (
+                  <Spin size="small" />
+                ) : (
+                  <Dropdown menu={userMenu} trigger={["click"]}>
+                    <Button
+                      type="text"
+                      className="user-dropdown-btn"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "8px 16px",
+                        fontWeight: 600,
+                        fontSize: 14,
+                        color: "#262626",
+                        borderRadius: 20,
+                        transition: "all 0.3s ease",
+                      }}
+                    >
+                      <Avatar
+                        size={36}
+                        icon={<UserOutlined />}
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)",
+                        }}
+                      />
+                      <span>{user?.fullName}</span>
+                      <DownOutlined style={{ fontSize: 10 }} />
+                    </Button>
+                  </Dropdown>
+                )}
+              </div>
+            )}
+          </div>
+        </Header>
+
+        {/* ================= BODY ================= */}
+        <Content style={{ padding: "24px 50px" }}>
+          <Outlet />
+        </Content>
+
+        {/* ================= FOOTER ================= */}
+        <Footer
+          style={{ padding: 0, background: "#fafafa", marginTop: "auto" }}
+        >
+          <div
+            style={{
+              maxWidth: 1200,
+              margin: "0 auto",
+              padding: "60px 50px 40px",
+            }}
+          >
+            <Row gutter={[48, 32]}>
+              {/* Column 1 */}
+              <Col xs={24} md={12} lg={10}>
+                <div style={{ marginBottom: 24 }}>
+                  <div
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 8,
-                      padding: "0 12px",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      color: "#1677ff",
+                      gap: 10,
+                      marginBottom: 16,
                     }}
                   >
-                    <Avatar
-                      size={32}
-                      icon={<UserOutlined />}
-                      style={{ backgroundColor: "#1677ff" }}
-                    />
-                    <span>{user?.fullName}</span>
-                  </Button>
-                </Dropdown>
-              )}
-            </div>
-          )}
-        </div>
-      </Header>
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        background:
+                          "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <ThunderboltOutlined
+                        style={{ color: "#fff", fontSize: 18 }}
+                      />
+                    </div>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        fontSize: 17,
+                        background:
+                          "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                      }}
+                    >
+                      EV Battery Swap Station
+                    </span>
+                  </div>
+                  <Text
+                    style={{
+                      color: "#595959",
+                      lineHeight: 1.8,
+                      fontSize: 14,
+                      display: "block",
+                    }}
+                  >
+                    Nền tảng quản lý trạm đổi pin thông minh, mang đến trải
+                    nghiệm nhanh chóng và tiện lợi cho người dùng xe điện.
+                  </Text>
+                </div>
+                <div
+                  style={{ color: "#595959", lineHeight: 1.8, fontSize: 14 }}
+                >
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <strong style={{ color: "#262626" }}>Địa chỉ:</strong>
+                    <span>Số 1 Lưu Hữu Phước, Đông Hoà, Dĩ An, TP. HCM</span>
+                  </div>
+                </div>
+              </Col>
 
-      {/* ================= BODY ================= */}
-      <Content style={{ padding: "24px 50px" }}>
-        <Outlet />
-      </Content>
-
-      {/* ================= FOOTER ================= */}
-      <Footer style={{ padding: 0, background: "#f9fafb" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 24px" }}>
-          <Row gutter={[32, 24]}>
-            {/* --- Cột 1 --- */}
-            <Col xs={24} md={12} lg={10}>
-              <div style={{ color: "#374151", lineHeight: 1.7, fontSize: 15 }}>
+              {/* Column 2 */}
+              <Col xs={24} md={8} lg={8}>
                 <div
                   style={{
                     fontWeight: 700,
-                    color: "#111827",
-                    marginBottom: 12,
+                    color: "#262626",
+                    marginBottom: 16,
                     fontSize: 16,
                   }}
                 >
-                  EV Battery Swap Station Management System
+                  Về chúng tôi
                 </div>
-                <div>
-                  <b>Địa chỉ:</b> Số 1 Lưu Hữu Phước, Đông Hoà, Dĩ An, TP. Hồ
-                  Chí Minh
-                </div>
-              </div>
-            </Col>
+                <Space direction="vertical" size={10} style={{ fontSize: 14 }}>
+                  <a href="#" className="footer-link">
+                    Giới thiệu
+                  </a>
+                  <a href="#" className="footer-link">
+                    Cách thức hoạt động
+                  </a>
+                  <a href="#" className="footer-link">
+                    Tuyển dụng
+                  </a>
+                  <a href="#" className="footer-link">
+                    Điều khoản & Chính sách
+                  </a>
+                </Space>
+              </Col>
 
-            {/* --- Cột 2 --- */}
-            <Col xs={24} md={8} lg={8}>
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: "#111827",
-                  marginBottom: 12,
-                  fontSize: 16,
-                }}
-              >
-                Về chúng tôi
-              </div>
-              <Space direction="vertical" size={8} style={{ fontSize: 14 }}>
-                <a href="#" className="footer-link">
-                  Giới thiệu
-                </a>
-                <a href="#" className="footer-link">
-                  Cách thức hoạt động
-                </a>
-                <a href="#" className="footer-link">
-                  Tuyển dụng
-                </a>
-                <a href="#" className="footer-link">
-                  Điều khoản & Chính sách
-                </a>
-              </Space>
-            </Col>
-
-            {/* --- Cột 3 --- */}
-            <Col xs={24} md={8} lg={6}>
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: "#111827",
-                  marginBottom: 12,
-                  fontSize: 16,
-                }}
-              >
-                Liên hệ
-              </div>
-              <Space direction="vertical" size={6} style={{ fontSize: 14 }}>
-                <span>
-                  <PhoneOutlined /> 0968 086 521
-                </span>
-                <span>
-                  <MailOutlined /> thiennmhse172145@fpt.edu.vn
-                </span>
-              </Space>
-
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: "#111827",
-                  margin: "20px 0 8px",
-                  fontSize: 16,
-                }}
-              >
-                Mạng xã hội
-              </div>
-              <Space size={16}>
-                <a
-                  href="https://www.facebook.com/nmhthien/"
-                  target="_blank"
-                  rel="noreferrer"
+              {/* Column 3 */}
+              <Col xs={24} md={8} lg={6}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    color: "#262626",
+                    marginBottom: 16,
+                    fontSize: 16,
+                  }}
                 >
-                  <FaFacebook style={{ fontSize: 20, color: "black" }} />
-                </a>
-                <a href="#">
-                  <FaYoutube style={{ fontSize: 22, color: "black" }} />
-                </a>
-              </Space>
-            </Col>
-          </Row>
-        </div>
+                  Liên hệ
+                </div>
+                <Space direction="vertical" size={10} style={{ fontSize: 14 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <PhoneOutlined style={{ color: "#1890ff" }} />
+                    <span style={{ color: "#595959" }}>0968 086 521</span>
+                  </div>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <MailOutlined style={{ color: "#1890ff" }} />
+                    <span style={{ color: "#595959" }}>
+                      thiennmhse172145@fpt.edu.vn
+                    </span>
+                  </div>
+                </Space>
 
-        <div
-          style={{
-            borderTop: "1px solid #e5e7eb",
-            background: "#f9fafb",
-            textAlign: "center",
-            padding: "14px 0",
-            fontSize: 13.5,
-            color: "#6b7280",
-          }}
-        >
-          © 2025 <b style={{ color: "#111827" }}>EV Battery Swap Station</b>.
-          All rights reserved.
-        </div>
-      </Footer>
-    </Layout>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    color: "#262626",
+                    margin: "24px 0 12px",
+                    fontSize: 16,
+                  }}
+                >
+                  Mạng xã hội
+                </div>
+                <Space size={12}>
+                  <a
+                    href="https://www.facebook.com/nmhthien/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="social-icon"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      background: "#f0f0f0",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    <FaFacebook style={{ fontSize: 18, color: "#262626" }} />
+                  </a>
+                  <a
+                    href="#"
+                    className="social-icon"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      background: "#f0f0f0",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    <FaYoutube style={{ fontSize: 18, color: "#262626" }} />
+                  </a>
+                </Space>
+              </Col>
+            </Row>
+          </div>
+
+          <div
+            style={{
+              borderTop: "1px solid #f0f0f0",
+              background: "#fff",
+              textAlign: "center",
+              padding: "20px 0",
+              fontSize: 13,
+              color: "#8c8c8c",
+            }}
+          >
+            © 2025{" "}
+            <strong style={{ color: "#262626" }}>
+              EV Battery Swap Station
+            </strong>
+            . All rights reserved.
+          </div>
+        </Footer>
+      </Layout>
+
+      {/* Global Styles */}
+      <style>
+        {`
+          /* Logo hover effect */
+          .logo-wrapper:hover {
+            transform: translateY(-2px);
+          }
+
+          .logo-wrapper:hover > div {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(24, 144, 255, 0.4) !important;
+          }
+
+          /* Header buttons */
+          .header-btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4) !important;
+          }
+
+          .header-btn-register:hover {
+            background: #1890ff !important;
+            color: #fff !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+          }
+
+          /* User dropdown */
+          .user-dropdown-btn:hover {
+            background: #f5f5f5 !important;
+          }
+
+          /* Footer links */
+          .footer-link {
+            color: #595959;
+            transition: all 0.3s ease;
+            display: inline-block;
+          }
+
+          .footer-link:hover {
+            color: #1890ff;
+            transform: translateX(4px);
+          }
+
+          /* Social icons */
+          .social-icon:hover {
+            background: #1890ff !important;
+            transform: translateY(-3px);
+          }
+
+          .social-icon:hover svg {
+            color: #fff !important;
+          }
+
+          /* Menu items */
+          .ant-menu-horizontal > .ant-menu-item::after,
+          .ant-menu-horizontal > .ant-menu-submenu::after {
+            border-bottom: 2px solid #1890ff !important;
+          }
+
+          .ant-menu-horizontal > .ant-menu-item:hover,
+          .ant-menu-horizontal > .ant-menu-submenu:hover {
+            color: #1890ff !important;
+          }
+
+          /* Smooth scrolling */
+          html {
+            scroll-behavior: smooth;
+          }
+
+
+            /* FIX: Loại bỏ gạch chân cho menu items không được chọn */
+    .ant-menu-horizontal > .ant-menu-item::after,
+    .ant-menu-horizontal > .ant-menu-submenu::after {
+      border-bottom: 2px solid transparent !important;
+      transition: border-color 0.3s ease;
+    }
+
+    /* Chỉ hiện gạch chân khi selected hoặc hover */
+    .ant-menu-horizontal > .ant-menu-item-selected::after,
+    .ant-menu-horizontal > .ant-menu-submenu-selected::after {
+      border-bottom: 2px solid #1890ff !important;
+    }
+
+    .ant-menu-horizontal > .ant-menu-item:hover::after,
+    .ant-menu-horizontal > .ant-menu-submenu:hover::after {
+      border-bottom: 2px solid #1890ff !important;
+    }
+
+        `}
+      </style>
+    </>
   );
 }
+
+const Text = ({ children, style }) => <span style={style}>{children}</span>;

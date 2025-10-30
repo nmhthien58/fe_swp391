@@ -1,6 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { connectWebSocket, disconnectWebSocket } from "../../services/wsClient";
-import { selectToken } from "../../redux/accountSlice";
+import React, { useState } from "react";
 import {
   PieChartOutlined,
   WarningOutlined,
@@ -56,22 +54,6 @@ const items = [
 ];
 
 const StaffDashboard = () => {
-  const token = useSelector(selectToken);
-
-  useEffect(() => {
-    // ví dụ staff thuộc trạm ID = 1 (hoặc lấy từ user info)
-    const stationId = 1;
-
-    connectWebSocket(stationId, token, (newBooking) => {
-      // ví dụ: hiển thị thông báo hoặc cập nhật bảng booking
-      console.log("Booking mới:", newBooking);
-    });
-
-    return () => {
-      disconnectWebSocket();
-    };
-  }, [token]);
-
   const [collapsed, setCollapsed] = useState(false);
   const {
     token: { colorBgContainer, borderRadiusLG },

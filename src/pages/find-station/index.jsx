@@ -17,18 +17,23 @@ import {
   DatePicker,
   message,
   Tooltip,
+  Badge,
+  Skeleton,
+  Result,
+  Divider,
 } from "antd";
 import {
   SearchOutlined,
   LoadingOutlined,
   CalendarOutlined,
+  AimOutlined,
+  InfoCircleOutlined,
 } from "@ant-design/icons";
 import { renderToString } from "react-dom/server";
 import { BsEvStationFill } from "react-icons/bs";
 import api from "../../config/axios";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
-
 dayjs.extend(utc);
 
 // ==== Goong JS (vector maps) ====
@@ -104,6 +109,31 @@ function decodePolyline(str, precision = 5) {
   return coordinates;
 }
 
+const chip = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  background: "#fff",
+  border: "1px solid #f0f0f0",
+  borderRadius: 999,
+  padding: "4px 10px",
+  boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+};
+
+const glassCard = {
+  borderRadius: 12,
+  boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
+};
+
+const toolbarCss = {
+  display: "flex",
+  gap: 12,
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+  marginBottom: 8,
+};
+
 const FindStation = () => {
   // ===== Redux + Router =====
   const user = useSelector(selectUser);
@@ -137,9 +167,9 @@ const FindStation = () => {
   );
 
   // --- NEW: Active plan state ---
-  const [activeSub, setActiveSub] = useState(null); // toàn bộ subscription
+  const [activeSub, setActiveSub] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
-  const [activePlan, setActivePlan] = useState(null); // {name, description,...}
+  const [activePlan, setActivePlan] = useState(null);
   const [planError, setPlanError] = useState(null);
 
   // --- Goong map refs ---
@@ -156,11 +186,13 @@ const FindStation = () => {
   const accuracyLayerId = "user-accuracy-layer";
   const routeSourceId = "goong-route"; // <— Directions
   const routeLayerId = "goong-route-layer"; // <— Directions
+
   const openBookingForStation = (stationId) => {
     setBookingStationId(stationId);
     setBookingTime(dayjs().add(30, "minute").second(0).millisecond(0));
     setBookingOpen(true);
   };
+
   // Luôn đồng bộ mapStations -> ref
   useEffect(() => {
     mapStationsRef.current = mapStations;
@@ -378,24 +410,24 @@ const FindStation = () => {
       const { latitude: lat, longitude: lng } = st || {};
       if (typeof lat !== "number" || typeof lng !== "number") return;
 
-      // ==== NEW: Tính số pin FULL ====
+      // ==== Tính số pin FULL ====
       const fullCount = (st?.batteries || []).filter(
         (b) => b.status === "FULL"
       ).length;
 
-      // ==== NEW: Xác định màu marker ====
+      // ==== Xác định màu marker ====
       let color = "green";
       if (fullCount === 0) color = "red";
       else if (fullCount < 5) color = "orange";
 
-      // ==== NEW: tạo icon với màu tương ứng ====
+      // ==== tạo icon ====
       const el = document.createElement("div");
       el.innerHTML = renderToString(
         <BsEvStationFill color={color} size={32} />
       );
       el.style.transform = "translate(-50%, -50%)";
 
-      // ==== popup như cũ ====
+      // ==== popup ====
       const popupHtml = `
       <div style="min-width:240px">
         <b>${st.name ?? "Trạm"}</b><br/>
@@ -410,7 +442,7 @@ const FindStation = () => {
         }
         <div style="margin-top:8px">
           <button id="book-${st.stationId}"
-                  style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:0;border-radius:6px;background:#1677ff;color:#fff;cursor:pointer;">
+                  style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:0;border-radius:8px;background:#1677ff;color:#fff;cursor:pointer;">
             <svg viewBox="64 64 896 896" focusable="false" data-icon="calendar" width="1em" height="1em" fill="currentColor" aria-hidden="true">
               <path d="M880 184H792V104a8 8 0 00-8-8h-48a8 8 0 00-8 8v80H296V104a8 8 0 00-8-8h-48a8 8 0 00-8 8v80H144c-17.7 0-32 14.3-32 32v624c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V216c0-17.7-14.3-32-32-32zm-40 616H184V376h656v424z"></path>
             </svg>
@@ -431,16 +463,14 @@ const FindStation = () => {
         }
       });
 
-      // ==== Thêm marker lên map ====
       const marker = new goongjs.Marker(el)
         .setLngLat([lng, lat])
         .setPopup(popup)
         .addTo(map);
-
       markersRef.current.push(marker);
     });
 
-    // Fit bounds như cũ
+    // Fit bounds
     const pts = mapStations
       .filter(
         (s) => typeof s.latitude === "number" && typeof s.longitude === "number"
@@ -592,7 +622,7 @@ const FindStation = () => {
     }
   };
 
-  // ==== NEW: Active subscription fetch ====
+  // ==== Active subscription fetch ====
   const fetchActiveSubscription = async (id) => {
     if (!id) {
       setActiveSub(null);
@@ -603,8 +633,8 @@ const FindStation = () => {
     setPlanError(null);
     try {
       const res = await api.get(`/api/driver-subscriptions/${id}/active`);
-      const data = res?.data?.plan ? res.data : res.data; // payload thực tế
-      setActiveSub(data); // ⬅️ có startDate, endDate, swapsUsed
+      const data = res?.data;
+      setActiveSub(data || null);
       setActivePlan(data?.plan || null);
     } catch (err) {
       setActiveSub(null);
@@ -621,7 +651,6 @@ const FindStation = () => {
 
   // ==== Booking modal handlers ====
   const openBookingModal = () => {
-    // mặc định chọn trạm gần nhất nếu đã có, nếu không chọn trạm đầu tiên
     const defaultStationId =
       nearest?.stationId ??
       initialStations?.find((s) => typeof s.stationId === "number")
@@ -644,29 +673,20 @@ const FindStation = () => {
 
     try {
       setBookingSubmitting(true);
-
-      // Ví dụ Swagger: 2025-10-31T07:48:13.893Z
       const isoUtc = dayjs(bookingTime).utc().toISOString();
-
-      // driverId & bookingTime là query params
       const res = await api.post(
         `/api/booking/${bookingStationId}/bookings`,
         null,
         { params: { driverId, bookingTime: isoUtc } }
       );
-
-      // (Bearer token sẽ được interceptor gắn vào header Authorization)
       const data = res?.data;
       toast.success("Đặt lịch thành công!");
-      // Nếu muốn hiển thị thêm thông tin trả về:
       message.success(`Đặt lịch #${data?.bookingId} lúc ${data?.bookingTime}`);
-
       setBookingOpen(false);
     } catch (e) {
       console.error(e);
       if (e?.response?.status === 401) {
         message.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
-        // navigate("/login"); // nếu muốn chuyển sang trang đăng nhập
       } else {
         toast.error(
           e?.response?.data?.message || "Đặt lịch thất bại, thử lại sau."
@@ -677,9 +697,8 @@ const FindStation = () => {
     }
   };
 
-  const disablePast = (current) => {
-    return current && current < dayjs().subtract(1, "minute");
-  };
+  const disablePast = (current) =>
+    current && current < dayjs().subtract(1, "minute");
 
   // helper format VND
   const vnd = (n) =>
@@ -694,25 +713,78 @@ const FindStation = () => {
   const fmtVN = (iso) =>
     iso ? dayjs(iso).add(7, "hour").format("DD/MM/YYYY HH:mm") : "-";
 
+  // ==== small UI helpers ====
+  const Legend = () => (
+    <div
+      style={{
+        display: "flex",
+        gap: 12,
+        flexWrap: "wrap",
+      }}
+    >
+      <span style={chip}>
+        <BsEvStationFill color="green" size={18} />
+        <Text strong>Pin đầy: Nhiều</Text>
+      </span>
+      <span style={chip}>
+        <BsEvStationFill color="orange" size={18} />
+        <Text strong>Pin đầy: Ít</Text>
+      </span>
+      <span style={chip}>
+        <BsEvStationFill color="red" size={18} />
+        <Text strong>Hết pin đầy</Text>
+      </span>
+    </div>
+  );
+
   return (
     <Content style={{ padding: "24px 50px" }}>
-      <Row gutter={24}>
+      <Row gutter={[24, 24]}>
         {/* BẢN ĐỒ */}
-        <Col span={16}>
-          <Card bordered={false}>
-            <Input
-              value={typed}
-              onChange={(e) => {
-                setTyped(e.target.value);
-                setNearest(null);
-                setUserPos(null);
-                setRouteCoords(null);
-              }}
-              placeholder="Tìm trạm theo địa chỉ hoặc tên trạm..."
-              prefix={<SearchOutlined />}
-              style={{ marginBottom: 8 }}
-              allowClear
-            />
+        <Col xl={16} lg={24} xs={24}>
+          <Card bordered={false} style={glassCard} bodyStyle={{ padding: 16 }}>
+            {/* Toolbar */}
+            <div style={toolbarCss}>
+              <Input
+                value={typed}
+                onChange={(e) => {
+                  setTyped(e.target.value);
+                  setNearest(null);
+                  setUserPos(null);
+                  setRouteCoords(null);
+                }}
+                placeholder="Tìm trạm theo địa chỉ hoặc tên trạm…"
+                prefix={<SearchOutlined />}
+                allowClear
+                size="large"
+                style={{ flex: 1, minWidth: 260 }}
+              />
+
+              <Space wrap>
+                <Tooltip title="Xác định vị trí hiện tại & tìm trạm gần nhất">
+                  <Button
+                    type="primary"
+                    icon={<AimOutlined />}
+                    loading={locating}
+                    size="large"
+                    onClick={handleFindNearest}
+                  >
+                    {locating ? "Đang định vị…" : "Trạm gần nhất"}
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Mở hộp thoại đặt lịch nhanh">
+                  <Button
+                    icon={<CalendarOutlined />}
+                    size="large"
+                    onClick={openBookingModal}
+                    style={{ background: "#24a148", color: "#fff" }}
+                  >
+                    Đặt lịch đổi pin
+                  </Button>
+                </Tooltip>
+              </Space>
+            </div>
+
             {loadingMap && (
               <div
                 style={{
@@ -724,127 +796,139 @@ const FindStation = () => {
                 }}
               >
                 <Spin indicator={<LoadingOutlined spin />} size="small" />
-                Đang tìm kiếm...
+                Đang tìm kiếm…
               </div>
             )}
 
-            <Space>
-              <Button
-                type="primary"
-                loading={locating}
-                onClick={handleFindNearest}
-                size="large"
-                style={{
-                  fontSize: 16,
-                }}
-              >
-                <IoLocationOutline />
-                {locating ? "Đang định vị..." : "Tìm trạm gần nhất"}
-              </Button>
-              <Button
-                type="primary"
-                onClick={openBookingModal}
-                size="large"
-                style={{
-                  backgroundColor: "green",
-                  fontSize: 16,
-                }}
-              >
-                <CalendarOutlined />
-                Đặt lịch đổi pin
-              </Button>
-            </Space>
-
+            {/* Map container */}
             <div
               style={{
+                position: "relative",
                 height: "68vh",
-                marginTop: 8,
-                borderRadius: 8,
+                borderRadius: 12,
                 overflow: "hidden",
+                background:
+                  "linear-gradient(180deg, rgba(240,249,255,0.8), rgba(255,255,255,0.8))",
               }}
             >
               <div
                 ref={mapContainerRef}
                 style={{ height: "100%", width: "100%" }}
               />
+
+              {/* Floating action buttons */}
+              <div
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  bottom: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <Tooltip title="Trạm gần nhất">
+                  <Button
+                    shape="circle"
+                    type="primary"
+                    size="large"
+                    icon={<AimOutlined />}
+                    onClick={handleFindNearest}
+                    loading={locating}
+                  />
+                </Tooltip>
+                <Tooltip title="Đặt lịch">
+                  <Button
+                    shape="circle"
+                    size="large"
+                    icon={<CalendarOutlined />}
+                    onClick={openBookingModal}
+                    style={{
+                      background: "#24a148",
+                      color: "#fff",
+                      border: "none",
+                    }}
+                  />
+                </Tooltip>
+              </div>
             </div>
 
-            {/* ==== CHÚ THÍCH MÀU MARKER ==== */}
+            {/* Legend */}
             <div
               style={{
                 marginTop: 12,
-                background: "#f5f5f5",
-                borderRadius: 8,
-                padding: "10px 16px",
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                flexWrap: "wrap",
+                background: "#fafafa",
+                border: "1px dashed #f0f0f0",
+                borderRadius: 12,
+                padding: "12px 16px",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <BsEvStationFill color="green" size={20} />
-                <Text strong>Trạm có nhiều pin đầy</Text>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginLeft: 15,
-                }}
-              >
-                <BsEvStationFill color="orange" size={20} />
-                <Text strong>Trạm ít pin đầy</Text>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginLeft: 15,
-                }}
-              >
-                <BsEvStationFill color="red" size={20} />
-                <Text strong>Trạm hết pin đầy</Text>
-              </div>
+              <Space style={{ width: "100%", justifyContent: "space-between" }}>
+                <Legend />
+                <Tooltip title="Màu marker dựa vào số pin FULL của trạm">
+                  <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                </Tooltip>
+              </Space>
             </div>
           </Card>
         </Col>
 
         {/* CỘT PHẢI */}
-        <Col span={8}>
+        <Col xl={8} lg={24} xs={24}>
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
-            <Card bordered={false}>
-              <Row gutter={16} align="middle">
+            {/* Thông tin phương tiện (placeholder – có thể bổ sung sau) */}
+            <Card
+              bordered={false}
+              style={glassCard}
+              bodyStyle={{ padding: 16 }}
+            >
+              <Row align="middle" justify="space-between">
                 <Col>
-                  <Title level={5}>Thông tin phương tiện đã liên kết</Title>
+                  <Title level={5} style={{ margin: 0 }}>
+                    Thông tin phương tiện đã liên kết
+                  </Title>
+                  <Text type="secondary">Cập nhật trong mục My Info</Text>
+                </Col>
+                <Col>
+                  <Badge color="blue" text="Xe điện" />
                 </Col>
               </Row>
             </Card>
 
-            {/* ==== GÓI ĐÃ ĐĂNG KÝ ==== */}
+            {/* GÓI ĐÃ ĐĂNG KÝ */}
             <Card
               bordered={false}
-              bodyStyle={{ borderLeft: "4px solid #1890ff", paddingLeft: 20 }}
+              style={glassCard}
+              bodyStyle={{ padding: 16 }}
             >
               <Title level={5} style={{ marginBottom: 12 }}>
                 Gói đã đăng ký
               </Title>
 
               {planLoading ? (
-                <Spin />
+                <Skeleton active paragraph={{ rows: 3 }} />
               ) : activePlan && activeSub ? (
                 <div>
-                  <Text strong style={{ fontSize: 16 }}>
-                    {activePlan.name}
-                  </Text>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 12 }}
+                  >
+                    <Title level={4} style={{ margin: 0 }}>
+                      {activePlan.name}
+                    </Title>
+                    <Tag color={activeSub.active ? "green" : "red"}>
+                      {activeSub.active
+                        ? "Đang hoạt động"
+                        : activeSub.status || "Hết hiệu lực"}
+                    </Tag>
+                  </div>
+
+                  <Divider style={{ margin: "12px 0" }} />
 
                   <div
                     style={{
                       display: "grid",
                       gridTemplateColumns: "1fr 1fr",
-                      gap: 8,
+                      gap: 10,
                     }}
                   >
                     <div>
@@ -859,7 +943,6 @@ const FindStation = () => {
                       <Text type="secondary">Ngày bắt đầu</Text>
                       <div>{fmtVN(activeSub.startDate)}</div>
                     </div>
-
                     <div>
                       <Text type="secondary">Ngày kết thúc</Text>
                       <div>{fmtVN(activeSub.endDate)}</div>
@@ -868,97 +951,119 @@ const FindStation = () => {
                       <Text type="secondary">Số lượt đổi</Text>
                       <div>{activePlan.swapLimit ?? "-"}</div>
                     </div>
-
                     <div>
                       <Text type="secondary">Đã sử dụng</Text>
                       <div>{activeSub.swapsUsed ?? 0}</div>
                     </div>
-
                     <div>
                       <Text type="secondary">Giá mỗi lần đổi</Text>
                       <div>{vnd(activePlan.pricePerSwap)}</div>
                     </div>
-
                     <div>
                       <Text type="secondary">Giá cho lượt vượt</Text>
                       <div>{vnd(activePlan.pricePerExtraSwap)}</div>
                     </div>
-
-                    <div>
-                      <Text type="secondary">Trạng thái</Text>
-                      <div>
-                        <Tag color={activeSub.active ? "green" : "red"}>
-                          {activeSub.active
-                            ? "Đang hoạt động"
-                            : activeSub.status || "Hết hiệu lực"}
-                        </Tag>
-                      </div>
-                    </div>
                   </div>
                 </div>
               ) : (
-                <div>
-                  <div style={{ marginBottom: 8 }}>
-                    {planError ? (
-                      <Text>{planError}</Text>
-                    ) : (
-                      <Text>Bạn chưa đăng ký gói nào.</Text>
-                    )}
-                  </div>
-                  <Button type="primary" onClick={() => navigate("/plans")}>
-                    Đăng ký ngay
-                  </Button>
-                </div>
+                <Result
+                  status="info"
+                  title={planError || "Bạn chưa đăng ký gói nào"}
+                  subTitle="Đăng ký gói để đặt lịch nhanh và nhận ưu đãi giá đổi pin."
+                  extra={
+                    <Button type="primary" onClick={() => navigate("/plans")}>
+                      Đăng ký ngay
+                    </Button>
+                  }
+                />
               )}
             </Card>
 
+            {/* DANH SÁCH TRẠM */}
             <Card
               bordered={false}
-              bodyStyle={{ borderLeft: "4px solid #52c41a", paddingLeft: 20 }}
+              style={glassCard}
+              bodyStyle={{ padding: 16 }}
             >
               <Title level={5} style={{ marginBottom: 12 }}>
                 Các trạm hiện tại
               </Title>
+
               {loadingList ? (
-                <Spin />
+                <>
+                  <Skeleton active avatar paragraph={{ rows: 1 }} />
+                  <Skeleton active avatar paragraph={{ rows: 1 }} />
+                  <Skeleton active avatar paragraph={{ rows: 1 }} />
+                </>
               ) : (
                 <List
                   dataSource={initialStations}
                   locale={{ emptyText: "Không có trạm" }}
-                  renderItem={(st) => (
-                    <List.Item
-                      key={st.stationId}
-                      // NEW: icon calendar đặt ở bên phải item
-                      actions={[
-                        <Tooltip title="Đặt lịch tại trạm này" key="calendar">
-                          <Button
-                            type="text"
-                            icon={<CalendarOutlined />}
-                            onClick={() => openBookingForStation(st.stationId)}
-                          />
-                        </Tooltip>,
-                      ]}
-                    >
-                      <div style={{ width: "100%" }}>
-                        <Text strong>{st.name}</Text>
-                        <br />
-                        <Text type="secondary">{st.address}</Text>
-                        <br />
-                        <Tag color={st.status === "ACTIVE" ? "green" : "red"}>
-                          {st.status}
-                        </Tag>
-                        <Text style={{ marginLeft: 8 }}>
-                          (
-                          {
-                            (st.batteries || []).filter(
-                              (b) => b.status === "FULL"
-                            ).length
-                          }{" "}
-                          pin đầy)
-                        </Text>
-                      </div>
-                    </List.Item>
-                  )}
+                  itemLayout="horizontal"
+                  renderItem={(st) => {
+                    const fullCount = (st.batteries || []).filter(
+                      (b) => b.status === "FULL"
+                    ).length;
+                    return (
+                      <List.Item
+                        key={st.stationId}
+                        actions={[
+                          <Tooltip title="Đặt lịch tại trạm này" key="calendar">
+                            <Button
+                              type="text"
+                              icon={<CalendarOutlined />}
+                              onClick={() =>
+                                openBookingForStation(st.stationId)
+                              }
+                            />
+                          </Tooltip>,
+                        ]}
+                        style={{
+                          padding: "10px 0",
+                          borderBottom: "1px solid #f5f5f5",
+                        }}
+                      >
+                        <List.Item.Meta
+                          avatar={
+                            <BsEvStationFill
+                              color={
+                                fullCount === 0
+                                  ? "red"
+                                  : fullCount < 5
+                                  ? "orange"
+                                  : "green"
+                              }
+                              size={24}
+                            />
+                          }
+                          title={
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <Text strong>{st.name}</Text>
+                              <Tag
+                                color={st.status === "ACTIVE" ? "green" : "red"}
+                              >
+                                {st.status}
+                              </Tag>
+                              <Badge
+                                count={`${fullCount} PIN ĐẦY`}
+                                style={{ backgroundColor: "#52c41a" }}
+                              />
+                            </div>
+                          }
+                          description={
+                            <Text type="secondary">{st.address}</Text>
+                          }
+                        />
+                      </List.Item>
+                    );
+                  }}
                 />
               )}
             </Card>
