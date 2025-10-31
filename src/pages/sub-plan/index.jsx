@@ -199,6 +199,7 @@ const Plans = () => {
   };
 
   // ----- Verify VNPay -----
+  // eslint-disable-next-line no-unused-vars
   const handleBuildVerifyUrl = () => {
     const url = buildVerifyUrl(verifyInput.trim());
     setVerifyUrlBuilt(url);
@@ -541,9 +542,9 @@ const Plans = () => {
         onCancel={() => setVerifyOpen(false)}
         title="Xác thực thanh toán VNPay"
         footer={[
-          <Button key="build" onClick={handleBuildVerifyUrl}>
-            Tạo verify URL
-          </Button>,
+          // <Button key="build" onClick={handleBuildVerifyUrl}>
+          //   Tạo verify URL
+          // </Button>,
           <Button
             key="verify"
             type="primary"

@@ -982,8 +982,7 @@ const FindStation = () => {
                     {"Bạn chưa liên kết phương tiện"}
                   </div>
                   <div style={{ color: "#595959", marginBottom: 12 }}>
-                    Hãy liên kết phương tiện để đặt lịch nhanh và nhận gợi ý
-                    trạm phù hợp.
+                    Hãy liên kết phương tiện để sử dụng dịch vụ.
                   </div>
                   <Button type="primary" onClick={() => navigate("/account")}>
                     Liên kết ngay
