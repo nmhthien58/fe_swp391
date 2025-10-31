@@ -71,7 +71,7 @@ function App() {
       children: [
         {
           index: true,
-          element: <Navigate to="stock" replace />,
+          element: <Navigate to="booking" replace />,
         },
         { path: "stock", element: <ManageStockBattery /> },
         { path: "booking", element: <ManageBooking /> },

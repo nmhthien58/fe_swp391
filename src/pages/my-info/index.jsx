@@ -1,5 +1,5 @@
 // src/pages/MyInfo.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import {
   Card,
@@ -11,6 +11,8 @@ import {
   Select,
   Upload,
   message,
+  Skeleton,
+  Divider,
 } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
 import { selectUser } from "../../redux/accountSlice";
@@ -22,9 +24,16 @@ const BATTERY_TYPES = ["LITHIUM_ION", "NICKEL_METAL_HYDRIDE", "LEAD_ACID"];
 
 const MyInfo = () => {
   const user = useSelector(selectUser);
+
+  // Modal + submit
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+
+  // Vehicle state
+  const [vehLoading, setVehLoading] = useState(false);
+  const [vehicle, setVehicle] = useState(null);
+  const [vehError, setVehError] = useState(null);
 
   const handleOpen = () => setOpen(true);
   const handleCancel = () => {
@@ -34,15 +43,37 @@ const MyInfo = () => {
 
   const getDriverId = () => user?.driverId ?? user?.id ?? user?.userId ?? null;
 
-  // Gửi register-swap và bỏ qua kết quả/ lỗi
+  // ====== NEW: Fetch my vehicle ======
+  const fetchMyVehicle = async () => {
+    setVehLoading(true);
+    setVehError(null);
+    try {
+      const res = await api.get("/api/vehicles/myVehicle");
+      setVehicle(res?.data || null);
+    } catch (err) {
+      setVehicle(null);
+      setVehError(
+        err?.response?.data?.message ||
+          "Bạn chưa liên kết phương tiện với tài khoản."
+      );
+    } finally {
+      setVehLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) fetchMyVehicle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // Gửi register-swap (không chặn flow dù lỗi)
   const fireAndForgetRegisterSwap = async () => {
     const driverId = getDriverId();
     if (!driverId) return;
     try {
       await api.post(`/api/${driverId}/register-swap`);
-      // Không kiểm tra/không hiển thị gì theo yêu cầu
     } catch (e) {
-      // Bỏ qua hoàn toàn, không chặn flow
+      // bỏ qua
       console.warn("register-swap ignored:", e);
     }
   };
@@ -60,10 +91,10 @@ const MyInfo = () => {
     try {
       setSubmitting(true);
 
-      // 1) Gọi register-swap trước, không quan tâm response
+      // 1) Gọi register-swap trước (không chặn)
       await fireAndForgetRegisterSwap();
 
-      // 2) Tiếp tục liên kết phương tiện
+      // 2) Liên kết phương tiện
       const formData = new FormData();
       formData.append("image", fileObj);
 
@@ -77,6 +108,9 @@ const MyInfo = () => {
         "Liên kết phương tiện thành công, bây giờ bạn có thể sử dụng dịch vụ đổi pin!"
       );
       handleCancel();
+
+      // 3) Tải lại thông tin xe
+      fetchMyVehicle();
     } catch (err) {
       const detail =
         err?.response?.data?.message ||
@@ -97,11 +131,15 @@ const MyInfo = () => {
       <Card
         title="Thông tin người dùng"
         bordered={false}
-        style={{ maxWidth: 640, margin: "32px auto", borderRadius: 10 }}
+        style={{ maxWidth: 820, margin: "32px auto", borderRadius: 10 }}
         extra={
-          <Button type="primary" onClick={handleOpen}>
-            Liên kết phương tiện để sử dụng dịch vụ đổi pin
-          </Button>
+          !vehicle ? (
+            <Button type="primary" onClick={handleOpen}>
+              Liên kết phương tiện để sử dụng dịch vụ đổi pin
+            </Button>
+          ) : (
+            <div></div>
+          )
         }
       >
         <Descriptions column={1}>
@@ -115,8 +153,60 @@ const MyInfo = () => {
             {user.email || "Chưa có"}
           </Descriptions.Item>
         </Descriptions>
+
+        <Divider />
+
+        <div style={{ marginBottom: 8, fontWeight: 600 }}>
+          Phương tiện đã liên kết
+        </div>
+
+        {vehLoading ? (
+          <Skeleton active paragraph={{ rows: 2 }} />
+        ) : vehicle ? (
+          <Descriptions column={2} bordered size="middle">
+            <Descriptions.Item label="Biển số/ VIN" span={1}>
+              {vehicle.vin ?? "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Loại pin" span={1}>
+              {vehicle.batteryType ?? "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Model" span={1}>
+              {vehicle.model ?? "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Hãng" span={1}>
+              {vehicle.manufacturer ?? "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Ảnh phương tiện" span={2}>
+              {vehicle.imageUrl ? (
+                // hiển thị ảnh nếu có
+                <img
+                  src={vehicle.imageUrl}
+                  alt="vehicle"
+                  style={{ maxHeight: 140, borderRadius: 8 }}
+                />
+              ) : (
+                "Chưa có ảnh"
+              )}
+            </Descriptions.Item>
+          </Descriptions>
+        ) : (
+          // ======= Đoạn đơn giản, không icon =======
+          <div style={{ padding: 8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+              {vehError || "Bạn chưa liên kết phương tiện"}
+            </div>
+            <div style={{ color: "#595959", marginBottom: 12 }}>
+              Hãy liên kết phương tiện để đặt lịch nhanh và nhận gợi ý trạm phù
+              hợp.
+            </div>
+            <Button type="primary" onClick={handleOpen}>
+              Liên kết phương tiện
+            </Button>
+          </div>
+        )}
       </Card>
 
+      {/* Modal liên kết */}
       <Modal
         title="Liên kết phương tiện"
         open={open}
@@ -134,11 +224,14 @@ const MyInfo = () => {
           initialValues={{ batteryType: "LITHIUM_ION" }}
         >
           <Form.Item
-            label="Biển số xe"
+            label="Biển số xe / VIN"
             name="vin"
             rules={[{ required: true, message: "Vui lòng nhập biển số xe" }]}
           >
-            <Input placeholder="VD: LRW3E7EK7NC123456" allowClear />
+            <Input
+              placeholder="VD: 59A1-123.45 hoặc LRW3E7EK7NC123456"
+              allowClear
+            />
           </Form.Item>
 
           <Form.Item

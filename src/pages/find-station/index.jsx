@@ -21,6 +21,7 @@ import {
   Skeleton,
   Result,
   Divider,
+  Avatar,
 } from "antd";
 import {
   SearchOutlined,
@@ -28,6 +29,7 @@ import {
   CalendarOutlined,
   AimOutlined,
   InfoCircleOutlined,
+  CarOutlined,
 } from "@ant-design/icons";
 import { renderToString } from "react-dom/server";
 import { BsEvStationFill } from "react-icons/bs";
@@ -46,7 +48,6 @@ import { haversineMeters, metersToKmText } from "../../components/map/mapUtils";
 import { useSelector } from "react-redux";
 import { selectUser } from "../../redux/accountSlice";
 import { useNavigate } from "react-router-dom";
-import { IoLocationOutline } from "react-icons/io5";
 import { toast } from "react-toastify";
 
 const { Content } = Layout;
@@ -139,6 +140,12 @@ const FindStation = () => {
   const user = useSelector(selectUser);
   const driverId = user?.driverId ?? null; // BE trả account.user.driverId
   const navigate = useNavigate();
+
+  // ===== Vehicle (NEW) =====
+  const [vehicle, setVehicle] = useState(null);
+  const [vehLoading, setVehLoading] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [vehError, setVehError] = useState(null);
 
   // ===== Danh sách trạm: cột phải (không đổi) + map (đổi theo search)
   const [initialStations, setInitialStations] = useState([]);
@@ -259,6 +266,30 @@ const FindStation = () => {
     }, 500);
     return () => clearTimeout(t);
   }, [typed]);
+
+  // ====== NEW: Fetch my vehicle ======
+  const fetchMyVehicle = async () => {
+    setVehLoading(true);
+    setVehError(null);
+    try {
+      const res = await api.get(`/api/vehicles/myVehicle`);
+      setVehicle(res?.data || null);
+    } catch (err) {
+      setVehicle(null);
+      setVehError(
+        err?.response?.data?.message ||
+          "Bạn chưa liên kết phương tiện với tài khoản."
+      );
+    } finally {
+      setVehLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // gọi ngay khi người dùng đã đăng nhập
+    fetchMyVehicle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Khởi tạo Goong map 1 lần
   useEffect(() => {
@@ -876,23 +907,83 @@ const FindStation = () => {
         {/* CỘT PHẢI */}
         <Col xl={8} lg={24} xs={24}>
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
-            {/* Thông tin phương tiện (placeholder – có thể bổ sung sau) */}
+            {/* THÔNG TIN PHƯƠNG TIỆN */}
             <Card
               bordered={false}
               style={glassCard}
               bodyStyle={{ padding: 16 }}
             >
-              <Row align="middle" justify="space-between">
+              <Row
+                align="middle"
+                justify="space-between"
+                style={{ marginBottom: 8 }}
+              >
                 <Col>
                   <Title level={5} style={{ margin: 0 }}>
                     Thông tin phương tiện đã liên kết
                   </Title>
-                  <Text type="secondary">Cập nhật trong mục My Info</Text>
                 </Col>
                 <Col>
                   <Badge color="blue" text="Xe điện" />
                 </Col>
               </Row>
+
+              {vehLoading ? (
+                <Skeleton active paragraph={{ rows: 2 }} />
+              ) : vehicle ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "auto 1fr",
+                    gap: 12,
+                  }}
+                >
+                  <Avatar
+                    shape="square"
+                    size={64}
+                    src={vehicle.imageUrl || undefined}
+                    icon={!vehicle.imageUrl ? <CarOutlined /> : undefined}
+                    style={{ borderRadius: 12 }}
+                  />
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <Text type="secondary">VIN</Text>
+                      <div>{vehicle.vin || "-"}</div>
+                    </div>
+                    <div>
+                      <Text type="secondary">Loại pin</Text>
+                      <div>{vehicle.batteryType || "-"}</div>
+                    </div>
+                    <div>
+                      <Text type="secondary">Model</Text>
+                      <div>{vehicle.model || "-"}</div>
+                    </div>
+                    <div>
+                      <Text type="secondary">Hãng</Text>
+                      <div>{vehicle.manufacturer || "-"}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: 8 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                    {"Bạn chưa liên kết phương tiện"}
+                  </div>
+                  <div style={{ color: "#595959", marginBottom: 12 }}>
+                    Hãy liên kết phương tiện để đặt lịch nhanh và nhận gợi ý
+                    trạm phù hợp.
+                  </div>
+                  <Button type="primary" onClick={() => navigate("/account")}>
+                    Liên kết ngay
+                  </Button>
+                </div>
+              )}
             </Card>
 
             {/* GÓI ĐÃ ĐĂNG KÝ */}
@@ -966,16 +1057,14 @@ const FindStation = () => {
                   </div>
                 </div>
               ) : (
-                <Result
-                  status="info"
-                  title={planError || "Bạn chưa đăng ký gói nào"}
-                  subTitle="Đăng ký gói để đặt lịch nhanh và nhận ưu đãi giá đổi pin."
-                  extra={
-                    <Button type="primary" onClick={() => navigate("/plans")}>
-                      Đăng ký ngay
-                    </Button>
-                  }
-                />
+                <div style={{ textAlign: "center", padding: 16 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                    {"Bạn chưa đăng ký gói nào"}
+                  </div>
+                  <Button type="primary" onClick={() => navigate("/plans")}>
+                    Đăng ký ngay
+                  </Button>
+                </div>
               )}
             </Card>
 
