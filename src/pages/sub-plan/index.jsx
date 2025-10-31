@@ -19,18 +19,21 @@ import {
   Tooltip,
   Divider,
   Empty,
+  Input,
 } from "antd";
 import {
   ThunderboltOutlined,
   CrownOutlined,
   FireOutlined,
-  ReloadOutlined,
   CheckCircleOutlined,
   InfoCircleOutlined,
 } from "@ant-design/icons";
+import { useSelector } from "react-redux";
+import { selectToken } from "../../redux/accountSlice";
 import api from "../../config/axios";
 
 const { Title, Text } = Typography;
+const { TextArea } = Input;
 
 const currencyVND = (v) =>
   typeof v === "number"
@@ -46,22 +49,54 @@ const glassCard = {
   boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
 };
 
+// ===== Helper: dựng verify URL từ link VNPay trả về =====
+const VERIFY_PATH = "/api/payments/verify";
+
+function buildVerifyUrl(pastedUrl) {
+  if (!pastedUrl || typeof pastedUrl !== "string") return "";
+
+  // Lấy phần query ?vnp_...
+  let search = "";
+  try {
+    const u = new URL(pastedUrl);
+    search = u.search || "";
+  } catch {
+    // Nếu không phải URL đầy đủ, cố gắng lấy phần sau dấu ?
+    const idx = pastedUrl.indexOf("?");
+    search = idx >= 0 ? pastedUrl.slice(idx) : pastedUrl;
+    if (search && search[0] !== "?") search = "?" + search;
+  }
+
+  // Lấy baseURL từ axios instance
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "") || "";
+  return `${base}${VERIFY_PATH}${search}`;
+}
+
 const Plans = () => {
+  const token = useSelector(selectToken);
+
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errText, setErrText] = useState("");
 
-  // modal
+  // modal chọn gói
   const [open, setOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [autoRenew, setAutoRenew] = useState(true);
 
-  // payment options (không dùng bankCode nữa)
+  // payment options
   const [paymentMethod, setPaymentMethod] = useState("CARD"); // "CARD" | "CASH"
 
   // sort UI
-  const [sortKey, setSortKey] = useState("popular"); // popular | priceAsc | priceDesc | swapDesc
+  const [sortKey, setSortKey] = useState("popular");
+
+  // ===== Modal verify VNPay =====
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyInput, setVerifyInput] = useState("");
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyUrlBuilt, setVerifyUrlBuilt] = useState("");
+  const [verifyResult, setVerifyResult] = useState("");
 
   const fetchPlans = async () => {
     try {
@@ -95,7 +130,7 @@ const Plans = () => {
     try {
       setConfirmLoading(true);
 
-      // B1: tạo subscription (schema trả về subscriptionId ở root)
+      // B1: tạo subscription
       const subRes = await api.post(
         "/api/driver-subscriptions/create",
         {
@@ -113,13 +148,13 @@ const Plans = () => {
       const subscriptionId = subRes?.data?.subscriptionId;
       if (!subscriptionId) throw new Error("Không lấy được subscriptionId.");
 
-      // B2: tạo payment — THEO ĐÚNG SWAGGER
+      // B2: tạo payment
       const payBody = {
         paymentType: "SUBSCRIPTION",
         subscriptionId: Number(subscriptionId),
-        method: paymentMethod, // "CARD" hoặc "CASH"
+        method: paymentMethod, // "CARD" | "CASH"
         ipAddr: "127.0.0.1",
-        amountVnd: Number(selectedPlan.price || 0), // backend sẽ nhân 100 khi tạo URL VNPay
+        amountVnd: Number(selectedPlan.price || 0),
         swapId: 0,
         cashierStaffId: 0,
       };
@@ -140,7 +175,17 @@ const Plans = () => {
       const paymentUrl = typeof payRes?.data === "string" ? payRes.data : null;
       if (!paymentUrl) throw new Error("Không nhận được paymentUrl từ API.");
 
-      window.location.assign(paymentUrl);
+      // ✅ Mở VNPay ở tab mới
+      window.open(paymentUrl, "_blank", "noopener,noreferrer");
+      message.success("Đang mở trang thanh toán VNPay...");
+
+      // ✅ Mở modal verify để người dùng dán link trả về
+      setVerifyInput("");
+      setVerifyUrlBuilt("");
+      setVerifyResult("");
+      setVerifyOpen(true);
+
+      setOpen(false);
     } catch (err) {
       console.error("subscribe/payment error:", err?.response?.data || err);
       message.error(
@@ -153,6 +198,48 @@ const Plans = () => {
     }
   };
 
+  // ----- Verify VNPay -----
+  const handleBuildVerifyUrl = () => {
+    const url = buildVerifyUrl(verifyInput.trim());
+    setVerifyUrlBuilt(url);
+    if (!url) {
+      message.error(
+        "Không dựng được verify URL. Vui lòng kiểm tra link đã dán."
+      );
+    }
+  };
+
+  const handleVerifyCall = async () => {
+    try {
+      setVerifyLoading(true);
+      setVerifyResult("");
+
+      const url = verifyUrlBuilt || buildVerifyUrl(verifyInput.trim());
+      if (!url) {
+        message.error("Thiếu verify URL.");
+        return;
+      }
+
+      const headers = { accept: "*/*" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(url, { method: "GET", headers });
+      const text = await res.text();
+      setVerifyResult(text);
+
+      if (res.ok) {
+        message.success("Verify thành công");
+      } else {
+        message.error(`Verify thất bại (HTTP ${res.status})`);
+      }
+    } catch (e) {
+      console.error(e);
+      message.error("Lỗi khi gọi verify");
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
   // ----- UI helpers -----
   const pricePerDay = (p) =>
     typeof p?.price === "number" &&
@@ -162,7 +249,6 @@ const Plans = () => {
       : Infinity;
 
   const valueScore = (p) => {
-    // Điểm “Ưu đãi”: lượt đổi / giá (có clip hạn chế)
     const swaps = Number(p?.swapLimit ?? 0);
     const price = Number(p?.price ?? 1);
     return swaps > 0 && price > 0 ? swaps / price : 0;
@@ -187,7 +273,6 @@ const Plans = () => {
         arr.sort((a, b) => (b.swapLimit ?? 0) - (a.swapLimit ?? 0));
         break;
       default:
-        // popular: ưu tiên recommended, sau đó giá/ ngày thấp
         arr.sort((a, b) => {
           if (a.planId === recommendedId) return -1;
           if (b.planId === recommendedId) return 1;
@@ -206,9 +291,16 @@ const Plans = () => {
     return <FireOutlined style={{ color: "#24a148" }} />;
   };
 
+  const openVerifyModalManual = () => {
+    setVerifyInput("");
+    setVerifyUrlBuilt("");
+    setVerifyResult("");
+    setVerifyOpen(true);
+  };
+
   return (
     <div style={{ padding: 24 }}>
-      {/* Page header */}
+      {/* ======= HEADER PLANS ======= */}
       <Card
         bordered={false}
         style={{ ...glassCard, marginBottom: 16 }}
@@ -216,17 +308,7 @@ const Plans = () => {
       >
         <Row align="middle" justify="space-between" gutter={[12, 12]}>
           <Col>
-            <Space direction="vertical" size={4}>
-              <Title level={3} style={{ margin: 0 }}>
-                Các gói đăng ký khả dụng
-              </Title>
-              <Text type="secondary">
-                Chọn gói phù hợp để nhận ưu đãi đổi pin và đặt lịch nhanh hơn.
-              </Text>
-            </Space>
-          </Col>
-          <Col>
-            <Space align="center">
+            <Space align="center" wrap>
               <Text type="secondary">Sắp xếp: </Text>
               <Segmented
                 size="large"
@@ -239,12 +321,20 @@ const Plans = () => {
                   { label: "Lượt đổi ↑", value: "swapDesc" },
                 ]}
               />
+
+              {/* ✅ Nút mở modal verify thủ công */}
+              <Button
+                onClick={openVerifyModalManual}
+                icon={<CheckCircleOutlined />}
+              >
+                Xác thực VNPay
+              </Button>
             </Space>
           </Col>
         </Row>
       </Card>
 
-      {/* Content */}
+      {/* ======= CONTENT PLANS ======= */}
       {loading ? (
         <Row gutter={[24, 24]}>
           {[...Array(6)].map((_, i) => (
@@ -277,14 +367,12 @@ const Plans = () => {
       ) : (
         <Row gutter={[24, 24]}>
           {sortedPlans.map((plan) => {
+            // eslint-disable-next-line no-unused-vars
             const isRecommended = plan.planId === recommendedId;
-            const ppd = pricePerDay(plan); // price/day
+            const ppd = pricePerDay(plan);
             return (
               <Col xs={24} sm={12} md={8} lg={6} key={plan.planId}>
-                <Badge.Ribbon
-                  text={isRecommended ? "Active" : "Active"}
-                  color={isRecommended ? "green" : "green"}
-                >
+                <Badge.Ribbon text="Active" color="green">
                   <Card
                     hoverable
                     bordered={false}
@@ -382,7 +470,7 @@ const Plans = () => {
         </Row>
       )}
 
-      {/* Modal đăng ký */}
+      {/* ===== Modal chọn gói / thanh toán ===== */}
       <Modal
         open={open}
         onOk={handleSubscribe}
@@ -445,6 +533,74 @@ const Plans = () => {
         ) : (
           <Spin />
         )}
+      </Modal>
+
+      {/* ===== Modal verify VNPay sau khi bấm thanh toán ===== */}
+      <Modal
+        open={verifyOpen}
+        onCancel={() => setVerifyOpen(false)}
+        title="Xác thực thanh toán VNPay"
+        footer={[
+          <Button key="build" onClick={handleBuildVerifyUrl}>
+            Tạo verify URL
+          </Button>,
+          <Button
+            key="verify"
+            type="primary"
+            loading={verifyLoading}
+            onClick={handleVerifyCall}
+          >
+            {verifyLoading ? "Đang xác thực..." : "Xác thực thanh toán"}
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          <Text type="secondary">
+            Sau khi thanh toán trên VNPay, dán URL VNPay trả về (ví dụ
+            <code style={{ fontSize: 12 }}>
+              {" "}
+              .../payments/vnpay/return?...vnp_*{" "}
+            </code>
+            ) vào ô dưới đây để xác thực.
+          </Text>
+
+          <TextArea
+            rows={3}
+            placeholder="Paste URL trả về từ VNPay ở đây..."
+            value={verifyInput}
+            onChange={(e) => setVerifyInput(e.target.value)}
+          />
+
+          {verifyUrlBuilt && (
+            <>
+              <Text type="secondary">Verify URL:</Text>
+              <div
+                style={{
+                  overflowX: "auto",
+                  fontFamily: "monospace",
+                  fontSize: 12,
+                }}
+              >
+                {verifyUrlBuilt}
+              </div>
+            </>
+          )}
+
+          {verifyResult && (
+            <pre
+              style={{
+                marginTop: 8,
+                background: "#f6f6f6",
+                padding: 12,
+                borderRadius: 8,
+                maxHeight: 280,
+                overflow: "auto",
+              }}
+            >
+              {verifyResult}
+            </pre>
+          )}
+        </Space>
       </Modal>
     </div>
   );

@@ -72,15 +72,15 @@ const ManageStation = () => {
       key: "model",
       render: (v) => v || "-",
     },
-    {
-      title: "Driver Sub.",
-      dataIndex: ["driverSubscription", "driverId"],
-      key: "driverSubscription",
-      render: (_, record) =>
-        record?.driverSubscription
-          ? JSON.stringify(record.driverSubscription)
-          : "-",
-    },
+    // {
+    //   title: "Driver Sub.",
+    //   dataIndex: ["driverSubscription", "driverId"],
+    //   key: "driverSubscription",
+    //   render: (_, record) =>
+    //     record?.driverSubscription
+    //       ? JSON.stringify(record.driverSubscription)
+    //       : "-",
+    // },
     { title: "Action", key: "action" },
   ];
 

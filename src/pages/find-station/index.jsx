@@ -177,6 +177,7 @@ const FindStation = () => {
   const [activeSub, setActiveSub] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [activePlan, setActivePlan] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [planError, setPlanError] = useState(null);
 
   // --- Goong map refs ---
@@ -940,11 +941,16 @@ const FindStation = () => {
                 >
                   <Avatar
                     shape="square"
-                    size={64}
-                    src={vehicle.imageUrl || undefined}
-                    icon={!vehicle.imageUrl ? <CarOutlined /> : undefined}
-                    style={{ borderRadius: 12 }}
+                    size={90}
+                    src={vehicle.imageUrl}
+                    icon={<CarOutlined />}
+                    style={{
+                      borderRadius: 16,
+                      backgroundColor: "#fff",
+                      boxShadow: "0 0 6px rgba(0,0,0,0.1)",
+                    }}
                   />
+
                   <div
                     style={{
                       display: "grid",
@@ -953,7 +959,7 @@ const FindStation = () => {
                     }}
                   >
                     <div>
-                      <Text type="secondary">VIN</Text>
+                      <Text type="secondary">Biển số xe</Text>
                       <div>{vehicle.vin || "-"}</div>
                     </div>
                     <div>

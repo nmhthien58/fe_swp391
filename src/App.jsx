@@ -29,6 +29,7 @@ import { useSelector } from "react-redux";
 import { selectToken } from "./redux/accountSlice.js";
 import TestVerify from "./pages/test/test-verify.jsx";
 import PlanHistory from "./pages/subcription-history/index.jsx";
+import BookingHistory from "./pages/booking-history/index.jsx";
 function RootRedirect() {
   const token = useSelector(selectToken);
   return token ? (
@@ -120,6 +121,10 @@ function App() {
             {
               path: "plans",
               element: <PlanHistory />,
+            },
+            {
+              path: "booking",
+              element: <BookingHistory />,
             },
           ],
         },
