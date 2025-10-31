@@ -11,6 +11,8 @@ import {
   Empty,
   Space,
   Upload,
+  Descriptions,
+  Spin,
 } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { toast } from "react-toastify";
@@ -31,63 +33,28 @@ const ManageStation = () => {
     total: 0,
   });
 
-  // ==== NEW: quản lý expand và dữ liệu batteries theo station ====
+  // ==== Expand batteries theo station ====
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [batteriesByStation, setBatteriesByStation] = useState({}); // { [stationId]: Battery[] }
   const [loadingBatteries, setLoadingBatteries] = useState({}); // { [stationId]: boolean }
 
-  // Bảng batteries (render trong expandedRowRender)
-  const batteryCols = [
-    { title: "ID", dataIndex: "batteryId", key: "batteryId", width: 90 },
-    { title: "Serial", dataIndex: "serialNumber", key: "serialNumber" },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status) => {
-        const map = {
-          FULL: "green",
-          CHARGING: "blue",
-          DAMAGED: "error",
-          UNKNOWN: "default",
-          AVAILABLE: "green",
-          MAINTENANCE: "orange",
-          IN_USE: "purple",
-          EMPTY: "red",
-          RESERVED: "black",
-          FULLY_CHARGED: "green",
-        };
-        return <Tag color={map[status] || "default"}>{status}</Tag>;
-      },
-    },
-    {
-      title: "Capacity (Wh)",
-      dataIndex: "capacityWh",
-      key: "capacityWh",
-      width: 130,
-    },
-    {
-      title: "Model",
-      dataIndex: "model",
-      key: "model",
-      render: (v) => v || "-",
-    },
-    // {
-    //   title: "Driver Sub.",
-    //   dataIndex: ["driverSubscription", "driverId"],
-    //   key: "driverSubscription",
-    //   render: (_, record) =>
-    //     record?.driverSubscription
-    //       ? JSON.stringify(record.driverSubscription)
-    //       : "-",
-    // },
-    { title: "Action", key: "action" },
-  ];
+  // ====== MODALS: History & Health cho battery ======
+  const [activeBattery, setActiveBattery] = useState(null);
 
-  // Helper: đếm số pin khả dụng từ mảng batteries
+  // History
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRows, setHistoryRows] = useState([]);
+
+  // Health
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthData, setHealthData] = useState(null);
+
+  // Helper: đếm số pin khả dụng
   const calcAvailable = (arr) => {
     if (!Array.isArray(arr)) return 0;
-    const OK = new Set(["FULL", "FULLY_CHARGED", "AVAILABLE"]); // tuỳ bạn chọn
+    const OK = new Set(["FULL", "FULLY_CHARGED", "AVAILABLE"]);
     return arr.reduce((n, b) => (OK.has(b?.status) ? n + 1 : n), 0);
   };
 
@@ -110,7 +77,6 @@ const ManageStation = () => {
       const content = data.content || [];
       const total = data.totalElements ?? content.length;
 
-      // TÍNH availableBatteries
       const withAvail = content.map((st) => ({
         ...st,
         availableBatteries:
@@ -202,7 +168,7 @@ const ManageStation = () => {
     }
   };
 
-  // Lazy load batteries cho 1 station (để bảng con)
+  // Lazy load batteries cho 1 station
   const loadBatteriesForStation = async (station) => {
     const sid = station.stationId ?? station.id;
     if (!sid) return;
@@ -220,7 +186,7 @@ const ManageStation = () => {
         const b1 = detail?.data?.batteries;
         if (Array.isArray(b1)) batteries = b1;
       } catch {
-        /* empty */
+        /* ignore */
       }
       if (!batteries.length) {
         try {
@@ -228,7 +194,7 @@ const ManageStation = () => {
           const b2 = bRes?.data;
           if (Array.isArray(b2)) batteries = b2;
         } catch {
-          /* empty */
+          /* ignore */
         }
       }
       setBatteriesByStation((m) => ({ ...m, [sid]: batteries }));
@@ -238,6 +204,66 @@ const ManageStation = () => {
       setBatteriesByStation((m) => ({ ...m, [sid]: [] }));
     } finally {
       setLoadingBatteries((m) => ({ ...m, [sid]: false }));
+    }
+  };
+
+  // ======= HISTORY & HEALTH handlers =======
+  const openBatteryHistory = async (battery) => {
+    setActiveBattery(battery);
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const id = battery.batteryId ?? battery.id;
+      // Ưu tiên endpoint /history; fallback sang /logs
+      let rows = [];
+      try {
+        const res = await api.get(`/api/batteries/${id}/history`);
+        rows = res?.data?.result || res?.data || [];
+      } catch {
+        const res2 = await api.get(`/api/batteries/${id}/logs`);
+        rows = res2?.data?.result || res2?.data || [];
+      }
+      // Chuẩn hóa cột hiển thị cơ bản
+      const norm = (Array.isArray(rows) ? rows : []).map((x, i) => ({
+        key: i,
+        time: x.time || x.timestamp || x.createdAt || x.updatedAt,
+        event: x.event || x.type || x.action || "-",
+        note: x.note || x.description || x.notes || "",
+        stationId: x.stationId ?? x.station?.id ?? null,
+        raw: x,
+      }));
+      setHistoryRows(norm);
+    } catch (e) {
+      console.error(e);
+      toast.error("Không tải được lịch sử pin.");
+      setHistoryRows([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const openBatteryHealth = async (battery) => {
+    setActiveBattery(battery);
+    setHealthOpen(true);
+    setHealthLoading(true);
+    try {
+      const id = battery.batteryId ?? battery.id;
+      // Ưu tiên endpoint /health; fallback sang /{id}
+      let data = null;
+      try {
+        const res = await api.get(`/api/batteries/${id}/health`);
+        data = res?.data?.result || res?.data || null;
+      } catch {
+        const res2 = await api.get(`/api/batteries/${id}`);
+        data = res2?.data?.health || res2?.data || null;
+      }
+      setHealthData(data);
+    } catch (e) {
+      console.error(e);
+      toast.error("Không tải được thông tin sức khỏe pin.");
+      setHealthData(null);
+    } finally {
+      setHealthLoading(false);
     }
   };
 
@@ -266,6 +292,58 @@ const ManageStation = () => {
       await loadBatteriesForStation(record);
     }
   };
+
+  // ======= Columns =======
+  const batteryCols = [
+    { title: "ID", dataIndex: "batteryId", key: "batteryId", width: 90 },
+    { title: "Serial", dataIndex: "serialNumber", key: "serialNumber" },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (status) => {
+        const map = {
+          FULL: "green",
+          CHARGING: "blue",
+          DAMAGED: "error",
+          UNKNOWN: "default",
+          AVAILABLE: "green",
+          MAINTENANCE: "orange",
+          IN_USE: "purple",
+          EMPTY: "red",
+          RESERVED: "black",
+          FULLY_CHARGED: "green",
+        };
+        return <Tag color={map[status] || "default"}>{status}</Tag>;
+      },
+    },
+    {
+      title: "Capacity (Wh)",
+      dataIndex: "capacityWh",
+      key: "capacityWh",
+      width: 130,
+    },
+    {
+      title: "Model",
+      dataIndex: "model",
+      key: "model",
+      render: (v) => v || "-",
+    },
+    {
+      title: "Action",
+      key: "action",
+      render: (_, record) => (
+        <Space>
+          <Button size="small" onClick={() => openBatteryHistory(record)}>
+            History
+          </Button>
+          <Button size="small" onClick={() => openBatteryHealth(record)}>
+            Health
+          </Button>
+        </Space>
+      ),
+    },
+  ];
 
   const columns = [
     { title: "Name", dataIndex: "name", key: "name" },
@@ -504,7 +582,6 @@ const ManageStation = () => {
             <Input placeholder="e.g. 106.6602" />
           </Form.Item>
 
-          {/* NEW: chọn ảnh để gửi field 'image' (optional) */}
           <Form.Item
             label="Image (optional)"
             name="image"
@@ -517,6 +594,138 @@ const ManageStation = () => {
             </Upload>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* ===== Modal: Battery History ===== */}
+      <Modal
+        open={historyOpen}
+        title={
+          <>
+            Battery History{" "}
+            {activeBattery?.serialNumber
+              ? `- ${activeBattery.serialNumber}`
+              : activeBattery?.batteryId
+              ? `#${activeBattery.batteryId}`
+              : ""}
+          </>
+        }
+        footer={null}
+        onCancel={() => setHistoryOpen(false)}
+        width={800}
+      >
+        {historyLoading ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <Spin />
+          </div>
+        ) : historyRows.length ? (
+          <Table
+            size="small"
+            rowKey={(r, i) => r.key ?? i}
+            columns={[
+              {
+                title: "Thời điểm",
+                dataIndex: "time",
+                key: "time",
+                render: (t) => (t ? new Date(t).toLocaleString("vi-VN") : "-"),
+                width: 180,
+              },
+              {
+                title: "Sự kiện",
+                dataIndex: "event",
+                key: "event",
+                width: 160,
+              },
+              {
+                title: "Ghi chú",
+                dataIndex: "note",
+                key: "note",
+                ellipsis: true,
+              },
+              {
+                title: "Trạm",
+                dataIndex: "stationId",
+                key: "stationId",
+                width: 100,
+              },
+            ]}
+            dataSource={historyRows}
+            pagination={{ pageSize: 8 }}
+          />
+        ) : (
+          <Empty description="Chưa có lịch sử" />
+        )}
+      </Modal>
+
+      {/* ===== Modal: Battery Health ===== */}
+      <Modal
+        open={healthOpen}
+        title={
+          <>
+            Battery Health{" "}
+            {activeBattery?.serialNumber
+              ? `- ${activeBattery.serialNumber}`
+              : activeBattery?.batteryId
+              ? `#${activeBattery.batteryId}`
+              : ""}
+          </>
+        }
+        footer={null}
+        onCancel={() => setHealthOpen(false)}
+        width={720}
+      >
+        {healthLoading ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <Spin />
+          </div>
+        ) : healthData ? (
+          <>
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="Status">
+                {healthData.status ?? activeBattery?.status ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Capacity (Wh)">
+                {healthData.capacityWh ?? activeBattery?.capacityWh ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="SOH (%)">
+                {healthData.soh ?? healthData.stateOfHealth ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Cycles">
+                {healthData.cycles ?? healthData.cycleCount ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Voltage (V)">
+                {healthData.voltage ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Temperature (°C)">
+                {healthData.temperature ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Last updated">
+                {healthData.updatedAt
+                  ? new Date(healthData.updatedAt).toLocaleString("vi-VN")
+                  : "-"}
+              </Descriptions.Item>
+            </Descriptions>
+
+            {/* Hiển thị JSON thô (tham khảo) */}
+            <div style={{ marginTop: 12 }}>
+              <details>
+                <summary>Raw</summary>
+                <pre
+                  style={{
+                    background: "#f6f6f6",
+                    padding: 12,
+                    borderRadius: 8,
+                    maxHeight: 260,
+                    overflow: "auto",
+                  }}
+                >
+                  {JSON.stringify(healthData, null, 2)}
+                </pre>
+              </details>
+            </div>
+          </>
+        ) : (
+          <Empty description="Không có dữ liệu Health" />
+        )}
       </Modal>
     </>
   );
