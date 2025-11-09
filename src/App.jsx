@@ -22,13 +22,13 @@ import Support from "./pages/support-ticket/index.jsx";
 import Plans from "./pages/sub-plan/index.jsx";
 import MyInfo from "./pages/my-info/index.jsx";
 import ManageSupportTicket from "./pages/manage-support-ticket/index.jsx";
-import ManageBooking from "./pages/manage-booking/index.jsx";
 import AppLayout from "./components/homepage/layout.jsx";
 import Home from "./pages/homepage/index.jsx";
 import { useSelector } from "react-redux";
 import { selectToken } from "./redux/accountSlice.js";
 import TestVerify from "./pages/test/test-verify.jsx";
 import PlanHistory from "./pages/subcription-history/index.jsx";
+import ManageSwap from "./pages/manage-booking/index.jsx";
 function RootRedirect() {
   const token = useSelector(selectToken);
   return token ? (
@@ -74,7 +74,7 @@ function App() {
           element: <Navigate to="booking" replace />,
         },
         { path: "stock", element: <ManageStockBattery /> },
-        { path: "booking", element: <ManageBooking /> },
+        { path: "booking", element: <ManageSwap /> },
         { path: "swap", element: <ManageBatterySwapTransaction /> },
       ],
     },

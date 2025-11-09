@@ -1,7 +1,8 @@
-// src/pages/ManageBooking.jsx
+// src/pages/ManageSwap.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
+  Tabs,
   Table,
   Tag,
   Space,
@@ -10,11 +11,17 @@ import {
   Popconfirm,
   Input,
   Typography,
+  Modal,
+  Form,
+  InputNumber,
+  Select,
 } from "antd";
 import {
   ReloadOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  DollarCircleOutlined,
+  ToolOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -24,34 +31,69 @@ import api from "../../config/axios";
 dayjs.extend(utc);
 
 const { Title, Text } = Typography;
+const { TabPane } = Tabs;
 
-const CONFIRM_URL = (id) => `/api/booking/${id}/confirm`;
-const CANCEL_URL = (id) => `/api/booking/${id}/cancel`;
+// API endpoints
+const GET_BOOKINGS_URL = `/api/booking/view`;
+const GET_SWAPS_URL = `/api/swaps`;
+const CONFIRM_SWAP_URL = (bookingId) => `/api/swaps/${bookingId}/confirm`;
+const CANCEL_BOOKING_URL = (bookingId) => `/api/booking/${bookingId}/cancel`;
+const PAY_SWAP_URL = (swapId) => `/api/swaps/${swapId}/pay`;
+const INSPECT_SWAP_URL = (swapId) => `/api/swaps/${swapId}/inspect-return`;
 
 const fmtVN = (iso) =>
   iso ? dayjs(iso).add(7, "hour").format("DD/MM/YYYY HH:mm") : "-";
 
-const statusColor = (s) =>
-  ({
-    PENDING: "default",
-    CONFIRMED: "blue",
-    ACTIVE: "processing",
-    COMPLETED: "green",
-    CANCELLED: "red",
-    EXPIRED: "gold",
-  }[s] || "default");
+const formatVnd = (n) =>
+  typeof n === "number"
+    ? n.toLocaleString("vi-VN") + " đ"
+    : n
+    ? Number(n).toLocaleString("vi-VN") + " đ"
+    : "-";
 
-export default function ManageBooking() {
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState([]);
-  const [keyword, setKeyword] = useState("");
-  const [viewMode, setViewMode] = useState("pending"); // 'pending' | 'processed'
+const bookingStatusTag = (s) => {
+  const map = {
+    PENDING: { color: "default", text: "PENDING" },
+    CONFIRMED: { color: "blue", text: "CONFIRMED" },
+    CANCELLED: { color: "red", text: "CANCELLED" },
+  };
+  const m = map[s] || { color: "default", text: s || "—" };
+  return <Tag color={m.color}>{m.text}</Tag>;
+};
 
+const swapStatusTag = (s) => {
+  const map = {
+    PENDING: { color: "blue" },
+    CONFIRMED: { color: "blue" },
+    PAID: { color: "gold" },
+    COMPLETED: { color: "green" },
+  };
+  const m = map[s] || { color: "default" };
+  return <Tag color={m.color}>{s}</Tag>;
+};
+
+export default function ManageSwap() {
+  // data
+  const [bookings, setBookings] = useState([]);
+  const [swaps, setSwaps] = useState([]);
   const [stationsMap, setStationsMap] = useState(new Map());
-  const [stationsLoading, setStationsLoading] = useState(false);
 
+  // ui state
+  const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState("");
+
+  // modal pay
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [payForm] = Form.useForm();
+  const [payingSwap, setPayingSwap] = useState(null);
+
+  // modal inspect
+  const [inspectModalOpen, setInspectModalOpen] = useState(false);
+  const [inspectForm] = Form.useForm();
+  const [inspectingSwap, setInspectingSwap] = useState(null);
+
+  // ===== fetch =====
   const fetchStations = async () => {
-    setStationsLoading(true);
     try {
       const res = await api.get("/api/stations/search", {
         params: { keyword: " " },
@@ -61,270 +103,528 @@ export default function ManageBooking() {
         list.map((s) => [s.stationId, s.name || `Trạm #${s.stationId}`])
       );
       setStationsMap(map);
-    } catch {
+    } catch (e) {
+      console.error(e);
       setStationsMap(new Map());
-    } finally {
-      setStationsLoading(false);
     }
   };
 
-  const fetchList = async () => {
+  const fetchAll = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/booking/view");
-      const data = Array.isArray(res.data) ? res.data : [];
-      setItems(data);
+      // booking
+      const resB = await api.get(GET_BOOKINGS_URL);
+      setBookings(Array.isArray(resB.data) ? resB.data : []);
+
+      // swaps (của bạn trả result.content)
+      const resS = await api.get(GET_SWAPS_URL, {
+        params: { page: 0, size: 50, sort: "createdAt,desc" },
+      });
+      const swapData = resS?.data?.result?.content ?? [];
+      setSwaps(swapData);
     } catch (e) {
       console.error(e);
-      message.error("Không tải được danh sách đặt lịch.");
-      setItems([]);
+      message.error("Không tải được dữ liệu.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchList();
+    fetchAll();
     fetchStations();
   }, []);
 
-  const patchRow = (updated) =>
-    setItems((prev) =>
-      prev.map((x) => (x.bookingId === updated.bookingId ? updated : x))
-    );
-
-  const onConfirm = async (record) => {
-    try {
-      const res = await api.put(CONFIRM_URL(record.bookingId));
-      patchRow(
-        res?.data || { ...record, status: "CONFIRMED", confirmed: true }
-      );
-      message.success(`Đã xác nhận #${record.bookingId}`);
-    } catch (e) {
-      console.error(e);
-      message.error(e?.response?.data?.message || "Xác nhận thất bại.");
-    }
-  };
-
-  const onCancel = async (record) => {
-    try {
-      const res = await api.put(CANCEL_URL(record.bookingId));
-      patchRow(
-        res?.data || { ...record, status: "CANCELLED", confirmed: false }
-      );
-      message.success(`Đã hủy #${record.bookingId}`);
-    } catch (e) {
-      console.error(e);
-      message.error(e?.response?.data?.message || "Hủy đặt lịch thất bại.");
-    }
-  };
-
-  const searchFilter = (b) => {
+  // ====== 1. Booking chờ xử lý ======
+  const pendingBookings = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    if (!kw) return true;
-    const stationName = stationsMap.get(b.stationId) || "";
-    const txt = `${b.bookingId} ${b.driverId} ${b.stationId} ${stationName} ${
-      b.reservedBatteryId ?? ""
-    } ${b.status || ""}`.toLowerCase();
-    return txt.includes(kw);
-  };
-
-  const dataForView = useMemo(() => {
-    let filtered = items.filter(searchFilter);
-    if (viewMode === "pending") {
-      filtered = filtered.filter((b) => b.status === "PENDING");
-    } else {
-      filtered = filtered.filter(
-        (b) => b.status === "CONFIRMED" || b.status === "CANCELLED"
+    return bookings
+      .filter((b) => b.status === "PENDING")
+      .filter((b) => {
+        if (!kw) return true;
+        const stationName = stationsMap.get(b.stationId) || "";
+        const txt =
+          `${b.bookingId} ${b.driverId} ${b.stationId} ${stationName}`.toLowerCase();
+        return txt.includes(kw);
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.bookingTime ?? 0).getTime() -
+          new Date(b.bookingTime ?? 0).getTime()
       );
+  }, [bookings, keyword, stationsMap]);
+
+  const handleConfirmSwap = async (record) => {
+    try {
+      await api.post(CONFIRM_SWAP_URL(record.bookingId));
+      message.success(`Đã xác nhận swap cho booking #${record.bookingId}`);
+      fetchAll();
+    } catch (e) {
+      console.error(e);
+      message.error(e?.response?.data?.message || "Xác nhận swap thất bại.");
     }
-    // ✅ Mặc định sort ASCENDING theo bookingTime
-    filtered.sort(
-      (a, b) =>
-        new Date(a.bookingTime ?? 0).getTime() -
-        new Date(b.bookingTime ?? 0).getTime()
-    );
-    return filtered;
-  }, [items, viewMode, keyword, stationsMap]);
-
-  const stationCell = (stationId) => {
-    const name = stationsMap.get(stationId);
-    return (
-      <div>
-        <div style={{ fontWeight: 600 }}>
-          {name || "—"}
-          {stationsLoading && !name ? " (đang tải…)" : ""}
-        </div>
-        <div style={{ color: "#8c8c8c", fontSize: 12 }}>ID: {stationId}</div>
-      </div>
-    );
   };
 
-  const actionCell = (record) => {
-    const isConfirmed = record.status === "CONFIRMED";
-    const isCancelled = record.status === "CANCELLED";
-    const disableConfirm = isCancelled || isConfirmed || record.confirmed;
-    const disableCancel = isCancelled || isConfirmed;
-    return (
-      <Space>
-        <Popconfirm
-          title={`Xác nhận lịch #${record.bookingId}?`}
-          okText="Xác nhận"
-          cancelText="Hủy"
-          onConfirm={() => onConfirm(record)}
-          disabled={disableConfirm}
-        >
-          <Button
-            type="primary"
-            icon={<CheckCircleOutlined />}
-            disabled={disableConfirm}
-          >
-            Xác nhận
-          </Button>
-        </Popconfirm>
-
-        <Popconfirm
-          title={`Hủy lịch #${record.bookingId}?`}
-          okText="Hủy lịch"
-          cancelText="Đóng"
-          onConfirm={() => onCancel(record)}
-          disabled={disableCancel}
-        >
-          <Button
-            danger
-            icon={<CloseCircleOutlined />}
-            disabled={disableCancel}
-            style={disableCancel ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-          >
-            Hủy
-          </Button>
-        </Popconfirm>
-      </Space>
-    );
+  const handleCancelBooking = async (record) => {
+    try {
+      await api.put(CANCEL_BOOKING_URL(record.bookingId));
+      message.success(`Đã hủy booking #${record.bookingId}`);
+      fetchAll();
+    } catch (e) {
+      console.error(e);
+      message.error(e?.response?.data?.message || "Hủy booking thất bại.");
+    }
   };
 
-  const columns = [
+  const bookingColumns = [
     {
-      title: "ID",
+      title: "Booking ID",
       dataIndex: "bookingId",
       key: "bookingId",
       width: 90,
-      fixed: "left",
-      sorter: (a, b) => a.bookingId - b.bookingId,
       render: (id) => <Text strong>#{id}</Text>,
     },
-    { title: "Tài xế", dataIndex: "driverId", key: "driverId", width: 90 },
+    {
+      title: "Tài xế",
+      dataIndex: "driverId",
+      key: "driverId",
+      width: 90,
+    },
     {
       title: "Trạm",
       dataIndex: "stationId",
       key: "stationId",
-      width: 220,
-      render: stationCell,
+      width: 200,
+      render: (id) => {
+        const name = stationsMap.get(id);
+        return (
+          <div>
+            <div style={{ fontWeight: 600 }}>{name || `Trạm #${id}`}</div>
+            <div style={{ fontSize: 12, color: "#999" }}>ID: {id}</div>
+          </div>
+        );
+      },
     },
     {
-      title: "Thời gian hẹn",
+      title: "Giờ hẹn",
       dataIndex: "bookingTime",
       key: "bookingTime",
-      width: 180,
+      width: 160,
       render: (iso) => fmtVN(iso),
-      sorter: (a, b) =>
-        new Date(a.bookingTime ?? 0).getTime() -
-        new Date(b.bookingTime ?? 0).getTime(),
-      defaultSortOrder: "ascend", // ✅ Mặc định ascending
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      key: "status",
+      width: 120,
+      render: bookingStatusTag,
+    },
+    {
+      title: "Thao tác",
+      key: "actions",
+      width: 240,
+      render: (_, record) => (
+        <Space>
+          <Popconfirm
+            title={`Xác nhận swap cho booking #${record.bookingId}?`}
+            onConfirm={() => handleConfirmSwap(record)}
+          >
+            <Button type="primary" icon={<CheckCircleOutlined />}>
+              Confirm swap
+            </Button>
+          </Popconfirm>
+          <Popconfirm
+            title={`Hủy booking #${record.bookingId}?`}
+            onConfirm={() => handleCancelBooking(record)}
+          >
+            <Button danger icon={<CloseCircleOutlined />}>
+              Hủy
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  // ====== 2. Swap đang thực hiện ======
+  // theo yêu cầu: swap đang thực hiện = status = CONFIRMED, PAID
+  const activeSwaps = useMemo(
+    () => swaps.filter((s) => ["CONFIRMED", "PAID"].includes(s.status)),
+    [swaps]
+  );
+
+  const openPayModal = (swap) => {
+    setPayingSwap(swap);
+    payForm.setFieldsValue({
+      method: "CASH",
+      amountVnd: swap.amountVnd ?? 0,
+    });
+    setPayModalOpen(true);
+  };
+
+  const submitPay = async () => {
+    try {
+      const values = await payForm.validateFields();
+      await api.post(PAY_SWAP_URL(payingSwap.swapId), values);
+      message.success("Thanh toán thành công");
+      setPayModalOpen(false);
+      setPayingSwap(null);
+      fetchAll();
+    } catch (e) {
+      console.error(e);
+      message.error(e?.response?.data?.message || "Thanh toán thất bại.");
+    }
+  };
+
+  const openInspectModal = (swap) => {
+    setInspectingSwap(swap);
+    inspectForm.setFieldsValue({
+      batteryId: swap.returnedBatteryId || 0,
+      condition: "GOOD",
+      socPercent: 0,
+      notes: "",
+    });
+    setInspectModalOpen(true);
+  };
+
+  const submitInspect = async () => {
+    try {
+      const values = await inspectForm.validateFields();
+      await api.post(INSPECT_SWAP_URL(inspectingSwap.swapId), values);
+      message.success("Đã ghi nhận pin trả về");
+      setInspectModalOpen(false);
+      setInspectingSwap(null);
+      fetchAll();
+    } catch (e) {
+      console.error(e);
+      message.error(
+        e?.response?.data?.message || "Ghi nhận pin trả về thất bại."
+      );
+    }
+  };
+
+  const activeSwapColumns = [
+    {
+      title: "Swap ID",
+      dataIndex: "swapId",
+      key: "swapId",
+      width: 80,
+      render: (id) => <Text strong>#{id}</Text>,
+    },
+    {
+      title: "Booking ID",
+      dataIndex: "bookingId",
+      key: "bookingId",
+      width: 90,
+    },
+    {
+      title: "Tài xế",
+      dataIndex: "driverId",
+      key: "driverId",
+      width: 90,
+    },
+    {
+      title: "Trạm",
+      dataIndex: "stationId",
+      key: "stationId",
+      width: 200,
+      render: (id) => {
+        const name = stationsMap.get(id);
+        return (
+          <div>
+            <div style={{ fontWeight: 600 }}>{name || `Trạm #${id}`}</div>
+            <div style={{ fontSize: 12, color: "#999" }}>ID: {id}</div>
+          </div>
+        );
+      },
     },
     {
       title: "Trạng thái",
       dataIndex: "status",
       key: "status",
       width: 130,
-      render: (s) => <Tag color={statusColor(s)}>{s || "—"}</Tag>,
+      render: swapStatusTag,
     },
-    ...(viewMode === "processed"
-      ? [
-          {
-            title: "Đã xác nhận?",
-            dataIndex: "confirmed",
-            key: "confirmed",
-            width: 120,
-            render: (v) => (v ? <Tag color="green">YES</Tag> : <Tag>NO</Tag>),
-          },
-        ]
-      : []),
+    {
+      title: "Tạo lúc",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 160,
+      render: (iso) => fmtVN(iso),
+    },
     {
       title: "Thao tác",
       key: "actions",
-      width: 210,
-      fixed: "right",
-      render: (_, record) => actionCell(record),
+      width: 240,
+      render: (_, record) => {
+        const canPay = record.status === "CONFIRMED";
+        const canInspect = record.status === "PAID";
+        return (
+          <Space>
+            <Button
+              icon={<DollarCircleOutlined />}
+              type="primary"
+              onClick={() => openPayModal(record)}
+              disabled={!canPay}
+            >
+              Pay
+            </Button>
+            <Button
+              icon={<ToolOutlined />}
+              onClick={() => openInspectModal(record)}
+              disabled={!canInspect}
+            >
+              Inspect return
+            </Button>
+          </Space>
+        );
+      },
     },
   ];
 
-  const tabBtn = (active) =>
-    active
-      ? { background: "#1677ff", color: "#fff" }
-      : { background: "#f5f5f5", color: "#333" };
+  // ====== 3. Lịch sử ======
+  const completedSwaps = swaps
+    .filter((s) => s.status === "COMPLETED")
+    .sort(
+      (a, b) =>
+        new Date(b.completedAt ?? b.updatedAt ?? 0).getTime() -
+        new Date(a.completedAt ?? a.updatedAt ?? 0).getTime()
+    );
+
+  const cancelledBookings = bookings
+    .filter((b) => b.status === "CANCELLED")
+    .sort(
+      (a, b) =>
+        new Date(b.bookingTime ?? 0).getTime() -
+        new Date(a.bookingTime ?? 0).getTime()
+    );
+
+  const historySwapColumns = [
+    {
+      title: "Swap ID",
+      dataIndex: "swapId",
+      key: "swapId",
+      width: 80,
+      render: (id) => <Text strong>#{id}</Text>,
+    },
+    {
+      title: "Driver",
+      dataIndex: "driverId",
+      key: "driverId",
+      width: 80,
+    },
+    {
+      title: "Trạm",
+      dataIndex: "stationId",
+      key: "stationId",
+      width: 160,
+      render: (id) => stationsMap.get(id) || `Trạm #${id}`,
+    },
+    {
+      title: "Pin đã đổi",
+      dataIndex: "reservedBatteryId",
+      key: "reservedBatteryId",
+      width: 110,
+      render: (v) => (v != null ? v : "-"),
+    },
+    {
+      title: "Pin trả về",
+      dataIndex: "returnedBatteryId",
+      key: "returnedBatteryId",
+      width: 110,
+      render: (v) => (v != null ? v : "-"),
+    },
+    {
+      title: "Số tiền",
+      dataIndex: "amountVnd",
+      key: "amountVnd",
+      width: 120,
+      render: (v) => formatVnd(v),
+    },
+    {
+      title: "Hoàn thành lúc",
+      dataIndex: "completedAt",
+      key: "completedAt",
+      width: 180,
+      render: (iso, record) =>
+        fmtVN(iso || record.updatedAt || record.inspectedAt),
+    },
+  ];
+
+  const historyBookingColumns = [
+    {
+      title: "Booking ID",
+      dataIndex: "bookingId",
+      key: "bookingId",
+      width: 100,
+    },
+    {
+      title: "Tài xế",
+      dataIndex: "driverId",
+      key: "driverId",
+      width: 90,
+    },
+    {
+      title: "Trạm",
+      dataIndex: "stationId",
+      key: "stationId",
+      render: (id) => stationsMap.get(id) || `Trạm #${id}`,
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      key: "status",
+      render: bookingStatusTag,
+    },
+    {
+      title: "Giờ hẹn",
+      dataIndex: "bookingTime",
+      key: "bookingTime",
+      render: (iso) => fmtVN(iso),
+    },
+  ];
 
   return (
     <Card
       bordered={false}
       style={{ borderRadius: 10 }}
-      title={
-        <Title level={4} style={{ margin: 0 }}>
-          Quản lý đặt lịch
-        </Title>
-      }
+      title={<Title level={4}>Quản lý đổi pin</Title>}
       extra={
         <Space>
           <Input
             allowClear
-            placeholder="Tìm theo mã, tài xế, tên trạm…"
+            placeholder="Tìm booking theo mã / trạm / tài xế…"
             prefix={<SearchOutlined />}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            style={{ width: 300 }}
+            style={{ width: 280 }}
           />
           <Button
             icon={<ReloadOutlined />}
-            onClick={() => {
-              fetchList();
-              fetchStations();
-            }}
-            loading={loading || stationsLoading}
+            onClick={fetchAll}
+            loading={loading}
           >
             Làm mới
           </Button>
         </Space>
       }
     >
-      <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-        <Button
-          style={tabBtn(viewMode === "pending")}
-          onClick={() => setViewMode("pending")}
-        >
-          Chưa xử lý
-        </Button>
-        <Button
-          style={tabBtn(viewMode === "processed")}
-          onClick={() => setViewMode("processed")}
-        >
-          Đã xử lý
-        </Button>
-      </div>
+      <Tabs defaultActiveKey="pending">
+        {/* TAB 1 */}
+        <TabPane tab="1. Booking chờ xử lý" key="pending">
+          <Table
+            rowKey="bookingId"
+            columns={bookingColumns}
+            dataSource={pendingBookings}
+            loading={loading}
+            pagination={{ pageSize: 10 }}
+          />
+        </TabPane>
 
-      <Table
-        rowKey="bookingId"
-        columns={columns}
-        dataSource={dataForView}
-        loading={loading}
-        pagination={{ pageSize: 10, showSizeChanger: true }}
-        scroll={{ x: 1100 }}
-        locale={{
-          emptyText:
-            viewMode === "pending"
-              ? "Không có booking chờ xử lý"
-              : "Chưa có booking đã xử lý",
-        }}
-      />
+        {/* TAB 2 */}
+        <TabPane tab="2. Swap đang thực hiện" key="active">
+          <Table
+            rowKey="swapId"
+            columns={activeSwapColumns}
+            dataSource={activeSwaps}
+            loading={loading}
+            pagination={{ pageSize: 10 }}
+          />
+        </TabPane>
+
+        {/* TAB 3 */}
+        <TabPane tab="3. Lịch sử" key="history">
+          <Title level={5}>Swap đã hoàn tất</Title>
+          <Table
+            rowKey="swapId"
+            columns={historySwapColumns}
+            dataSource={completedSwaps}
+            loading={loading}
+            pagination={{ pageSize: 5 }}
+            style={{ marginBottom: 24 }}
+          />
+
+          <Title level={5}>Booking đã hủy</Title>
+          <Table
+            rowKey="bookingId"
+            columns={historyBookingColumns}
+            dataSource={cancelledBookings}
+            loading={loading}
+            pagination={{ pageSize: 5 }}
+          />
+        </TabPane>
+      </Tabs>
+
+      {/* PAY MODAL */}
+      <Modal
+        open={payModalOpen}
+        title={`Thanh toán swap #${payingSwap?.swapId || ""}`}
+        onCancel={() => setPayModalOpen(false)}
+        onOk={submitPay}
+        okText="Thanh toán"
+        destroyOnClose
+      >
+        <Form form={payForm} layout="vertical">
+          <Form.Item
+            label="Phương thức"
+            name="method"
+            rules={[{ required: true, message: "Chọn phương thức" }]}
+          >
+            <Select
+              options={[
+                { value: "CASH", label: "CASH" },
+                { value: "VNPAY", label: "VNPAY" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item
+            label="Số tiền (VND)"
+            name="amountVnd"
+            rules={[{ required: true, message: "Nhập số tiền" }]}
+          >
+            <InputNumber min={0} style={{ width: "100%" }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* INSPECT MODAL */}
+      <Modal
+        open={inspectModalOpen}
+        title={`Inspect return swap #${inspectingSwap?.swapId || ""}`}
+        onCancel={() => setInspectModalOpen(false)}
+        onOk={submitInspect}
+        okText="Ghi nhận"
+        destroyOnClose
+      >
+        <Form form={inspectForm} layout="vertical">
+          <Form.Item
+            label="Battery ID"
+            name="batteryId"
+            rules={[{ required: true, message: "Nhập batteryId" }]}
+          >
+            <InputNumber min={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            label="Tình trạng"
+            name="condition"
+            rules={[{ required: true, message: "Chọn tình trạng" }]}
+          >
+            <Select
+              options={[
+                { value: "GOOD", label: "GOOD" },
+                { value: "DEGRADED", label: "DEGRADED" },
+                { value: "DAMAGED", label: "DAMAGED" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="SOC (%)" name="socPercent">
+            <InputNumber min={0} max={100} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label="Ghi chú" name="notes">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Card>
   );
 }

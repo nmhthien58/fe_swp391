@@ -1,10 +1,21 @@
-import React, { useState } from "react";
-import { Card, Row, Col, Statistic, Select, DatePicker, Table } from "antd";
+// src/pages/AdminRevenue.jsx
+import React, { useEffect, useState, useMemo } from "react";
+import {
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Select,
+  DatePicker,
+  Table,
+  Spin,
+  message,
+} from "antd";
 import {
   DollarOutlined,
   SwapOutlined,
   RiseOutlined,
-  ClockCircleOutlined,
+  HomeOutlined,
 } from "@ant-design/icons";
 import {
   LineChart,
@@ -21,161 +32,295 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import dayjs from "dayjs";
+import api from "../../config/axios";
 
 const { RangePicker } = DatePicker;
+const { Option } = Select;
+
+// màu random cho biểu đồ
+const COLORS = [
+  "#8884d8",
+  "#82ca9d",
+  "#ffc658",
+  "#ff8042",
+  "#00C49F",
+  "#0088FE",
+];
 
 const Overview = () => {
   const [timeRange, setTimeRange] = useState("month");
   // eslint-disable-next-line no-unused-vars
   const [selectedDates, setSelectedDates] = useState(null);
 
-  // Mock data - thay thế bằng API call thực tế
-  const summaryStats = {
-    totalRevenue: 125600000,
-    totalSwaps: 3456,
-    averagePerSwap: 36340,
-    growthRate: 12.5,
+  const [loading, setLoading] = useState(false);
+
+  // data từ API
+  const [plans, setPlans] = useState([]); // /api/subscription-plans/all
+  const [planStatsMap, setPlanStatsMap] = useState({}); // {planId: {totalSubscriptions,...}}
+  const [swaps, setSwaps] = useState([]); // completed + paid
+  const [stationsMap, setStationsMap] = useState(new Map()); // stationId -> name
+
+  // ===== helper =====
+
+  const fetchPlans = async () => {
+    const res = await api.get("/api/subscription-plans/all");
+    return Array.isArray(res.data?.result) ? res.data.result : [];
   };
 
-  // Dữ liệu doanh thu theo thời gian
-  const revenueData = [
-    { month: "T1", revenue: 85000000, swaps: 2340 },
-    { month: "T2", revenue: 92000000, swaps: 2531 },
-    { month: "T3", revenue: 98000000, swaps: 2697 },
-    { month: "T4", revenue: 105000000, swaps: 2889 },
-    { month: "T5", revenue: 112000000, swaps: 3082 },
-    { month: "T6", revenue: 125600000, swaps: 3456 },
-  ];
+  const fetchPlanStats = async (planId) => {
+    const res = await api.get(`/api/subscription-plans/${planId}/statistics`);
+    // hình của bạn là result là object
+    return res.data?.result || {};
+  };
 
-  // Dữ liệu tần suất đổi pin theo giờ
-  const hourlySwapData = [
-    { hour: "0h", swaps: 45 },
-    { hour: "2h", swaps: 23 },
-    { hour: "4h", swaps: 12 },
-    { hour: "6h", swaps: 89 },
-    { hour: "8h", swaps: 234 },
-    { hour: "10h", swaps: 198 },
-    { hour: "12h", swaps: 267 },
-    { hour: "14h", swaps: 245 },
-    { hour: "16h", swaps: 289 },
-    { hour: "18h", swaps: 356 },
-    { hour: "20h", swaps: 298 },
-    { hour: "22h", swaps: 187 },
-  ];
+  const fetchSwapsByStatus = async (status) => {
+    const res = await api.get("/api/swaps", {
+      params: {
+        page: 0,
+        size: 200,
+        sort: "createdAt,desc",
+        status, // COMPLETED | PAID
+      },
+    });
+    const content = res.data?.result?.content ?? [];
+    return content;
+  };
 
-  // Dữ liệu phân bố theo loại pin
-  const batteryTypeData = [
-    { name: "48V 20Ah", value: 1234, color: "#0088FE" },
-    { name: "60V 32Ah", value: 987, color: "#00C49F" },
-    { name: "48V 12Ah", value: 756, color: "#FFBB28" },
-    { name: "72V 40Ah", value: 479, color: "#FF8042" },
-  ];
+  const fetchStations = async () => {
+    const res = await api.get("/api/stations/search", {
+      params: { keyword: " " },
+    });
+    const list = Array.isArray(res.data) ? res.data : [];
+    return new Map(
+      list.map((s) => [s.stationId, s.name || `Trạm #${s.stationId}`])
+    );
+  };
 
-  // Bảng top trạm đổi pin
-  const topStationsColumns = [
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      // 1. plans
+      const planList = await fetchPlans();
+      setPlans(planList);
+
+      // 2. stats cho từng plan (song song)
+      const statsArr = await Promise.all(
+        planList.map((p) => fetchPlanStats(p.planId))
+      );
+      const map = {};
+      planList.forEach((p, idx) => {
+        map[p.planId] = statsArr[idx];
+      });
+      setPlanStatsMap(map);
+
+      // 3. swaps COMPLETED + PAID
+      const [completed, paid] = await Promise.all([
+        fetchSwapsByStatus("COMPLETED"),
+        fetchSwapsByStatus("PAID"),
+      ]);
+      // tránh trùng swapId (rare) => ghép rồi dùng map
+      const merged = [...completed, ...paid];
+      const swapMap = new Map();
+      merged.forEach((s) => {
+        swapMap.set(s.swapId, s);
+      });
+      setSwaps(Array.from(swapMap.values()));
+
+      // 4. stations
+      const stMap = await fetchStations();
+      setStationsMap(stMap);
+    } catch (e) {
+      console.error(e);
+      message.error("Không tải được dữ liệu thống kê.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  // ======= tính toán doanh thu =======
+
+  // 1. tổng tiền từ gói đăng ký
+  const totalRevenueFromPlans = useMemo(() => {
+    // mỗi gói: price * totalSubscriptions
+    return plans.reduce((sum, plan) => {
+      const stats = planStatsMap[plan.planId];
+      const count = stats?.totalSubscriptions ?? 0;
+      const price = plan.price ?? 0;
+      return sum + price * count;
+    }, 0);
+  }, [plans, planStatsMap]);
+
+  // 2. bảng chi tiết doanh thu từ từng gói
+  const revenuePerPlan = useMemo(() => {
+    return plans.map((plan) => {
+      const stats = planStatsMap[plan.planId] || {};
+      const totalSubs = stats.totalSubscriptions ?? 0;
+      const revenue = (plan.price ?? 0) * totalSubs;
+      return {
+        key: plan.planId,
+        planId: plan.planId,
+        name: plan.name,
+        price: plan.price ?? 0,
+        totalSubscriptions: totalSubs,
+        revenue,
+        active: plan.active,
+      };
+    });
+  }, [plans, planStatsMap]);
+
+  // gói nào nhiều lượt mua nhất
+  const bestPlan = useMemo(() => {
+    return revenuePerPlan.reduce(
+      (best, cur) =>
+        cur.totalSubscriptions > (best?.totalSubscriptions ?? 0) ? cur : best,
+      null
+    );
+  }, [revenuePerPlan]);
+
+  // 3. tổng tiền từ giao dịch đổi pin (swaps COMPLETED, PAID)
+  const totalRevenueFromSwaps = useMemo(() => {
+    return swaps.reduce((sum, s) => sum + (s.amountVnd ?? 0), 0);
+  }, [swaps]);
+
+  // 4. doanh thu theo trạm
+  const revenueByStation = useMemo(() => {
+    const map = new Map(); // stationId -> {stationId, name, revenue, swaps}
+    swaps.forEach((s) => {
+      const stationId = s.stationId;
+      if (!stationId) return;
+      if (!map.has(stationId)) {
+        map.set(stationId, {
+          stationId,
+          name: stationsMap.get(stationId) || `Trạm #${stationId}`,
+          revenue: 0,
+          swaps: 0,
+        });
+      }
+      const item = map.get(stationId);
+      item.revenue += s.amountVnd ?? 0;
+      item.swaps += 1;
+    });
+    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  }, [swaps, stationsMap]);
+
+  // 5. biểu đồ revenue nguồn: gói vs swap
+  const revenueSourceData = useMemo(
+    () => [
+      { name: "Gói đăng ký", value: totalRevenueFromPlans },
+      { name: "Đổi pin", value: totalRevenueFromSwaps },
+    ],
+    [totalRevenueFromPlans, totalRevenueFromSwaps]
+  );
+
+  // 6. biểu đồ revenue theo trạm (bar)
+  const stationChartData = useMemo(() => {
+    // lấy top 7 trạm
+    return revenueByStation.slice(0, 7).map((s) => ({
+      station: s.name,
+      revenue: s.revenue,
+    }));
+  }, [revenueByStation]);
+
+  // 7. biểu đồ revenue theo ngày/tháng từ swaps (để vẽ line)
+  const timeSeriesData = useMemo(() => {
+    // group theo yyyy-MM-dd của thanh toán / completedAt / createdAt
+    const map = new Map();
+    swaps.forEach((s) => {
+      const dateStr = (s.completedAt || s.paidAt || s.createdAt || "").slice(
+        0,
+        10
+      );
+      if (!dateStr) return;
+      if (!map.has(dateStr)) {
+        map.set(dateStr, { date: dateStr, revenue: 0, swaps: 0 });
+      }
+      const item = map.get(dateStr);
+      item.revenue += s.amountVnd ?? 0;
+      item.swaps += 1;
+    });
+    // sort theo ngày
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+  }, [swaps]);
+
+  // bảng doanh thu theo gói
+  const planColumns = [
     {
-      title: "Xếp hạng",
-      dataIndex: "rank",
-      key: "rank",
-      width: 100,
-      render: (rank) => (
-        <span style={{ fontWeight: "bold", color: "#1890ff" }}>#{rank}</span>
+      title: "Gói",
+      dataIndex: "name",
+      key: "name",
+    },
+    {
+      title: "Giá gói (VND)",
+      dataIndex: "price",
+      key: "price",
+      render: (v) => v?.toLocaleString("vi-VN"),
+    },
+    {
+      title: "Số lượt mua",
+      dataIndex: "totalSubscriptions",
+      key: "totalSubscriptions",
+    },
+    {
+      title: "Doanh thu",
+      dataIndex: "revenue",
+      key: "revenue",
+      render: (v) => v?.toLocaleString("vi-VN"),
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "active",
+      key: "active",
+      render: (v) =>
+        v ? <span style={{ color: "#52c41a" }}>Đang bán</span> : "Ngừng",
+    },
+  ];
+
+  // bảng doanh thu theo trạm
+  const stationColumns = [
+    {
+      title: "Trạm",
+      dataIndex: "name",
+      key: "name",
+      // eslint-disable-next-line no-unused-vars
+      render: (v, r) => (
+        <span>
+          <HomeOutlined style={{ marginRight: 6 }} />
+          {v}
+        </span>
       ),
-    },
-    {
-      title: "Tên trạm",
-      dataIndex: "stationName",
-      key: "stationName",
-    },
-    {
-      title: "Địa chỉ",
-      dataIndex: "address",
-      key: "address",
     },
     {
       title: "Số lượt đổi",
       dataIndex: "swaps",
       key: "swaps",
-      render: (swaps) => swaps.toLocaleString("vi-VN"),
     },
     {
       title: "Doanh thu (VND)",
       dataIndex: "revenue",
       key: "revenue",
-      render: (revenue) => revenue.toLocaleString("vi-VN"),
+      render: (v) => v?.toLocaleString("vi-VN"),
     },
-  ];
-
-  const topStationsData = [
-    {
-      key: 1,
-      rank: 1,
-      stationName: "Trạm Quận 1",
-      address: "123 Nguyễn Huệ, Q.1",
-      swaps: 567,
-      revenue: 20618000,
-    },
-    {
-      key: 2,
-      rank: 2,
-      stationName: "Trạm Thủ Đức",
-      address: "456 Võ Văn Ngân, Thủ Đức",
-      swaps: 489,
-      revenue: 17776600,
-    },
-    {
-      key: 3,
-      rank: 3,
-      stationName: "Trạm Bình Thạnh",
-      address: "789 Điện Biên Phủ, Bình Thạnh",
-      swaps: 423,
-      revenue: 15369820,
-    },
-    {
-      key: 4,
-      rank: 4,
-      stationName: "Trạm Quận 7",
-      address: "321 Nguyễn Văn Linh, Q.7",
-      swaps: 398,
-      revenue: 14463320,
-    },
-    {
-      key: 5,
-      rank: 5,
-      stationName: "Trạm Tân Bình",
-      address: "654 Cộng Hòa, Tân Bình",
-      swaps: 367,
-      revenue: 13336780,
-    },
-  ];
-
-  // Giờ cao điểm
-  const peakHours = [
-    { time: "18:00 - 19:00", swaps: 356, percentage: 10.3 },
-    { time: "16:00 - 17:00", swaps: 289, percentage: 8.4 },
-    { time: "20:00 - 21:00", swaps: 298, percentage: 8.6 },
   ];
 
   return (
-    <div style={{ padding: "24px" }}>
-      {/* Header */}
+    <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 24 }}>
-        <h2
-          style={{
-            fontSize: 28,
-            fontWeight: "bold",
-            color: "#1a1a1a",
-            marginBottom: 8,
-          }}
-        >
-          Báo cáo & Thống kê
+        <h2 style={{ fontSize: 28, fontWeight: 700 }}>
+          Báo cáo & Thống kê doanh thu
         </h2>
-        <p style={{ color: "#666", fontSize: 14 }}>
-          Tổng quan về doanh thu và hoạt động đổi pin
+        <p style={{ color: "#666" }}>
+          Tổng hợp doanh thu từ gói đăng ký và giao dịch đổi pin.
         </p>
       </div>
 
-      {/* Filters */}
+      {/* filter */}
       <Card style={{ marginBottom: 24 }}>
         <Row gutter={16}>
           <Col>
@@ -183,219 +328,198 @@ const Overview = () => {
             <Select
               value={timeRange}
               onChange={setTimeRange}
-              style={{ width: 150 }}
+              style={{ width: 160 }}
             >
-              <Select.Option value="day">Hôm nay</Select.Option>
-              <Select.Option value="week">Tuần này</Select.Option>
-              <Select.Option value="month">Tháng này</Select.Option>
-              <Select.Option value="year">Năm này</Select.Option>
-              <Select.Option value="custom">Tùy chỉnh</Select.Option>
+              <Option value="day">Hôm nay</Option>
+              <Option value="week">Tuần này</Option>
+              <Option value="month">Tháng này</Option>
+              <Option value="year">Năm nay</Option>
+              <Option value="custom">Tùy chỉnh</Option>
             </Select>
           </Col>
           {timeRange === "custom" && (
             <Col>
               <RangePicker
-                onChange={setSelectedDates}
+                onChange={(dates) => setSelectedDates(dates)}
                 format="DD/MM/YYYY"
-                placeholder={["Từ ngày", "Đến ngày"]}
               />
             </Col>
           )}
         </Row>
       </Card>
 
-      {/* Summary Statistics */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Tổng doanh thu"
-              value={summaryStats.totalRevenue}
-              precision={0}
-              valueStyle={{ color: "#3f8600" }}
-              prefix={<DollarOutlined />}
-              suffix="VND"
-              formatter={(value) => value.toLocaleString("vi-VN")}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Tổng lượt đổi pin"
-              value={summaryStats.totalSwaps}
-              valueStyle={{ color: "#1890ff" }}
-              prefix={<SwapOutlined />}
-              suffix="lượt"
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Trung bình/lượt"
-              value={summaryStats.averagePerSwap}
-              precision={0}
-              valueStyle={{ color: "#cf1322" }}
-              suffix="VND"
-              formatter={(value) => value.toLocaleString("vi-VN")}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Tăng trưởng"
-              value={summaryStats.growthRate}
-              precision={1}
-              valueStyle={{ color: "#3f8600" }}
-              prefix={<RiseOutlined />}
-              suffix="%"
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Revenue Chart */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col xs={24} lg={16}>
-          <Card title="Biểu đồ doanh thu & số lượt đổi pin">
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
-                <Tooltip
-                  formatter={(value, name) => {
-                    if (name === "Doanh thu") {
-                      return [value.toLocaleString("vi-VN") + " VND", name];
-                    }
-                    return [value.toLocaleString("vi-VN") + " lượt", name];
-                  }}
+      {loading ? (
+        <Spin tip="Đang tải dữ liệu..." />
+      ) : (
+        <>
+          {/* summary cards */}
+          <Row gutter={16} style={{ marginBottom: 24 }}>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Tổng tiền từ gói đăng ký"
+                  value={totalRevenueFromPlans}
+                  valueStyle={{ color: "#3f8600" }}
+                  prefix={<DollarOutlined />}
+                  formatter={(v) => v.toLocaleString("vi-VN")}
+                  suffix=" VND"
                 />
-                <Legend />
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#8884d8"
-                  strokeWidth={2}
-                  name="Doanh thu"
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Tổng tiền từ đổi pin"
+                  value={totalRevenueFromSwaps}
+                  valueStyle={{ color: "#1890ff" }}
+                  prefix={<SwapOutlined />}
+                  formatter={(v) => v.toLocaleString("vi-VN")}
+                  suffix=" VND"
                 />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="swaps"
-                  stroke="#82ca9d"
-                  strokeWidth={2}
-                  name="Số lượt đổi"
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Tổng lượt swap (PAID/COMPLETED)"
+                  value={swaps.length}
+                  valueStyle={{ color: "#cf1322" }}
+                  suffix=" lượt"
                 />
-              </LineChart>
-            </ResponsiveContainer>
-          </Card>
-        </Col>
-
-        <Col xs={24} lg={8}>
-          <Card title="Phân bố loại pin">
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={batteryTypeData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) =>
-                    `${name}: ${(percent * 100).toFixed(0)}%`
-                  }
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {batteryTypeData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Hourly Swap Frequency */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col xs={24}>
-          <Card
-            title={
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <ClockCircleOutlined style={{ marginRight: 8 }} />
-                Tần suất đổi pin theo giờ
-              </div>
-            }
-          >
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={hourlySwapData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="hour" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value) => value.toLocaleString("vi-VN") + " lượt"}
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Gói bán chạy nhất"
+                  value={bestPlan ? bestPlan.name : "—"}
+                  prefix={<RiseOutlined />}
                 />
-                <Legend />
-                <Bar dataKey="swaps" fill="#8884d8" name="Số lượt đổi" />
-              </BarChart>
-            </ResponsiveContainer>
+              </Card>
+            </Col>
+          </Row>
 
-            {/* Peak Hours Summary */}
-            <div
-              style={{
-                marginTop: 24,
-                padding: "16px",
-                background: "#f5f5f5",
-                borderRadius: 8,
-              }}
-            >
-              <h4 style={{ marginBottom: 12, fontWeight: "bold" }}>
-                🔥 Giờ cao điểm
-              </h4>
-              <Row gutter={16}>
-                {peakHours.map((peak, index) => (
-                  <Col xs={24} sm={8} key={index}>
-                    <div style={{ textAlign: "center" }}>
-                      <div
-                        style={{
-                          fontSize: 20,
-                          fontWeight: "bold",
-                          color: "#1890ff",
-                        }}
-                      >
-                        {peak.time}
-                      </div>
-                      <div style={{ fontSize: 16, color: "#666" }}>
-                        {peak.swaps} lượt ({peak.percentage}%)
-                      </div>
-                    </div>
-                  </Col>
-                ))}
-              </Row>
-            </div>
-          </Card>
-        </Col>
-      </Row>
+          {/* charts 1 */}
+          <Row gutter={16} style={{ marginBottom: 24 }}>
+            <Col xs={24} lg={16}>
+              <Card title="Doanh thu đổi pin theo ngày">
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={timeSeriesData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(d) => dayjs(d).format("DD/MM")}
+                    />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value, name) => {
+                        if (name === "Doanh thu") {
+                          return [value.toLocaleString("vi-VN") + " VND", name];
+                        }
+                        return [value.toLocaleString("vi-VN") + " lượt", name];
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#8884d8"
+                      strokeWidth={2}
+                      name="Doanh thu"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="swaps"
+                      stroke="#82ca9d"
+                      strokeWidth={2}
+                      name="Số lượt đổi"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Card>
+            </Col>
+            <Col xs={24} lg={8}>
+              <Card title="Tỷ lệ nguồn thu">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={revenueSourceData}
+                      dataKey="value"
+                      nameKey="name"
+                      outerRadius={100}
+                      label={(entry) =>
+                        `${entry.name}: ${entry.value.toLocaleString(
+                          "vi-VN"
+                        )} VND`
+                      }
+                    >
+                      {revenueSourceData.map((entry, index) => (
+                        <Cell
+                          key={index}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) =>
+                        value.toLocaleString("vi-VN") + " VND"
+                      }
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            </Col>
+          </Row>
 
-      {/* Top Stations Table */}
-      <Row gutter={16}>
-        <Col xs={24}>
-          <Card title="Top 5 trạm đổi pin hiệu quả nhất">
-            <Table
-              columns={topStationsColumns}
-              dataSource={topStationsData}
-              pagination={false}
-            />
-          </Card>
-        </Col>
-      </Row>
+          {/* charts 2 */}
+          <Row gutter={16} style={{ marginBottom: 24 }}>
+            <Col xs={24} lg={14}>
+              <Card title="Doanh thu theo trạm">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={stationChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="station" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value) =>
+                        value.toLocaleString("vi-VN") + " VND"
+                      }
+                    />
+                    <Legend />
+                    <Bar dataKey="revenue" name="Doanh thu" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            </Col>
+            <Col xs={24} lg={10}>
+              <Card title="Doanh thu theo gói đăng ký">
+                <Table
+                  columns={planColumns}
+                  dataSource={revenuePerPlan}
+                  size="small"
+                  pagination={false}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          {/* table stations */}
+          <Row gutter={16}>
+            <Col xs={24}>
+              <Card title="Chi tiết doanh thu theo trạm">
+                <Table
+                  columns={stationColumns}
+                  dataSource={revenueByStation.map((s, idx) => ({
+                    key: s.stationId || idx,
+                    ...s,
+                  }))}
+                  pagination={{ pageSize: 10 }}
+                />
+              </Card>
+            </Col>
+          </Row>
+        </>
+      )}
     </div>
   );
 };
