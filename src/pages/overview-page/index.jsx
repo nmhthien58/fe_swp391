@@ -10,12 +10,14 @@ import {
   Table,
   Spin,
   message,
+  Tag,
 } from "antd";
 import {
   DollarOutlined,
   SwapOutlined,
   RiseOutlined,
   HomeOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import {
   LineChart,
@@ -38,14 +40,13 @@ import api from "../../config/axios";
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-// màu random cho biểu đồ
 const COLORS = [
-  "#8884d8",
-  "#82ca9d",
-  "#ffc658",
-  "#ff8042",
-  "#00C49F",
-  "#0088FE",
+  "#4F46E5",
+  "#F97316",
+  "#22C55E",
+  "#0EA5E9",
+  "#A855F7",
+  "#F43F5E",
 ];
 
 const Overview = () => {
@@ -54,14 +55,17 @@ const Overview = () => {
   const [selectedDates, setSelectedDates] = useState(null);
 
   const [loading, setLoading] = useState(false);
+  const [plans, setPlans] = useState([]);
+  const [planStatsMap, setPlanStatsMap] = useState({});
+  const [swaps, setSwaps] = useState([]);
+  const [stationsMap, setStationsMap] = useState(new Map());
 
-  // data từ API
-  const [plans, setPlans] = useState([]); // /api/subscription-plans/all
-  const [planStatsMap, setPlanStatsMap] = useState({}); // {planId: {totalSubscriptions,...}}
-  const [swaps, setSwaps] = useState([]); // completed + paid
-  const [stationsMap, setStationsMap] = useState(new Map()); // stationId -> name
-
-  // ===== helper =====
+  // ===== helpers =====
+  // eslint-disable-next-line no-unused-vars
+  const fmtVnd = (n) =>
+    typeof n === "number"
+      ? n.toLocaleString("vi-VN") + " VND"
+      : (Number(n) || 0).toLocaleString("vi-VN") + " VND";
 
   const fetchPlans = async () => {
     const res = await api.get("/api/subscription-plans/all");
@@ -70,21 +74,14 @@ const Overview = () => {
 
   const fetchPlanStats = async (planId) => {
     const res = await api.get(`/api/subscription-plans/${planId}/statistics`);
-    // hình của bạn là result là object
     return res.data?.result || {};
   };
 
   const fetchSwapsByStatus = async (status) => {
     const res = await api.get("/api/swaps", {
-      params: {
-        page: 0,
-        size: 200,
-        sort: "createdAt,desc",
-        status, // COMPLETED | PAID
-      },
+      params: { page: 0, size: 200, sort: "createdAt,desc", status },
     });
-    const content = res.data?.result?.content ?? [];
-    return content;
+    return res.data?.result?.content ?? [];
   };
 
   const fetchStations = async () => {
@@ -100,11 +97,9 @@ const Overview = () => {
   const loadAll = async () => {
     setLoading(true);
     try {
-      // 1. plans
       const planList = await fetchPlans();
       setPlans(planList);
 
-      // 2. stats cho từng plan (song song)
       const statsArr = await Promise.all(
         planList.map((p) => fetchPlanStats(p.planId))
       );
@@ -114,20 +109,16 @@ const Overview = () => {
       });
       setPlanStatsMap(map);
 
-      // 3. swaps COMPLETED + PAID
       const [completed, paid] = await Promise.all([
         fetchSwapsByStatus("COMPLETED"),
         fetchSwapsByStatus("PAID"),
       ]);
-      // tránh trùng swapId (rare) => ghép rồi dùng map
+      // merge tránh trùng
       const merged = [...completed, ...paid];
       const swapMap = new Map();
-      merged.forEach((s) => {
-        swapMap.set(s.swapId, s);
-      });
+      merged.forEach((s) => swapMap.set(s.swapId, s));
       setSwaps(Array.from(swapMap.values()));
 
-      // 4. stations
       const stMap = await fetchStations();
       setStationsMap(stMap);
     } catch (e) {
@@ -142,20 +133,15 @@ const Overview = () => {
     loadAll();
   }, []);
 
-  // ======= tính toán doanh thu =======
-
-  // 1. tổng tiền từ gói đăng ký
+  // ====== tính toán ======
   const totalRevenueFromPlans = useMemo(() => {
-    // mỗi gói: price * totalSubscriptions
     return plans.reduce((sum, plan) => {
       const stats = planStatsMap[plan.planId];
       const count = stats?.totalSubscriptions ?? 0;
-      const price = plan.price ?? 0;
-      return sum + price * count;
+      return sum + (plan.price ?? 0) * count;
     }, 0);
   }, [plans, planStatsMap]);
 
-  // 2. bảng chi tiết doanh thu từ từng gói
   const revenuePerPlan = useMemo(() => {
     return plans.map((plan) => {
       const stats = planStatsMap[plan.planId] || {};
@@ -173,7 +159,6 @@ const Overview = () => {
     });
   }, [plans, planStatsMap]);
 
-  // gói nào nhiều lượt mua nhất
   const bestPlan = useMemo(() => {
     return revenuePerPlan.reduce(
       (best, cur) =>
@@ -182,14 +167,13 @@ const Overview = () => {
     );
   }, [revenuePerPlan]);
 
-  // 3. tổng tiền từ giao dịch đổi pin (swaps COMPLETED, PAID)
-  const totalRevenueFromSwaps = useMemo(() => {
-    return swaps.reduce((sum, s) => sum + (s.amountVnd ?? 0), 0);
-  }, [swaps]);
+  const totalRevenueFromSwaps = useMemo(
+    () => swaps.reduce((sum, s) => sum + (s.amountVnd ?? 0), 0),
+    [swaps]
+  );
 
-  // 4. doanh thu theo trạm
   const revenueByStation = useMemo(() => {
-    const map = new Map(); // stationId -> {stationId, name, revenue, swaps}
+    const map = new Map();
     swaps.forEach((s) => {
       const stationId = s.stationId;
       if (!stationId) return;
@@ -208,7 +192,6 @@ const Overview = () => {
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
   }, [swaps, stationsMap]);
 
-  // 5. biểu đồ revenue nguồn: gói vs swap
   const revenueSourceData = useMemo(
     () => [
       { name: "Gói đăng ký", value: totalRevenueFromPlans },
@@ -217,18 +200,16 @@ const Overview = () => {
     [totalRevenueFromPlans, totalRevenueFromSwaps]
   );
 
-  // 6. biểu đồ revenue theo trạm (bar)
-  const stationChartData = useMemo(() => {
-    // lấy top 7 trạm
-    return revenueByStation.slice(0, 7).map((s) => ({
-      station: s.name,
-      revenue: s.revenue,
-    }));
-  }, [revenueByStation]);
+  const stationChartData = useMemo(
+    () =>
+      revenueByStation.slice(0, 7).map((s) => ({
+        station: s.name,
+        revenue: s.revenue,
+      })),
+    [revenueByStation]
+  );
 
-  // 7. biểu đồ revenue theo ngày/tháng từ swaps (để vẽ line)
   const timeSeriesData = useMemo(() => {
-    // group theo yyyy-MM-dd của thanh toán / completedAt / createdAt
     const map = new Map();
     swaps.forEach((s) => {
       const dateStr = (s.completedAt || s.paidAt || s.createdAt || "").slice(
@@ -243,21 +224,21 @@ const Overview = () => {
       item.revenue += s.amountVnd ?? 0;
       item.swaps += 1;
     });
-    // sort theo ngày
     return Array.from(map.values()).sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
   }, [swaps]);
 
-  // bảng doanh thu theo gói
+  // ====== columns ======
   const planColumns = [
     {
       title: "Gói",
       dataIndex: "name",
       key: "name",
+      render: (text) => <span style={{ fontWeight: 500 }}>{text}</span>,
     },
     {
-      title: "Giá gói (VND)",
+      title: "Giá (VND)",
       dataIndex: "price",
       key: "price",
       render: (v) => v?.toLocaleString("vi-VN"),
@@ -277,21 +258,18 @@ const Overview = () => {
       title: "Trạng thái",
       dataIndex: "active",
       key: "active",
-      render: (v) =>
-        v ? <span style={{ color: "#52c41a" }}>Đang bán</span> : "Ngừng",
+      render: (v) => (v ? <Tag color="green">Đang bán</Tag> : <Tag>Ngừng</Tag>),
     },
   ];
 
-  // bảng doanh thu theo trạm
   const stationColumns = [
     {
       title: "Trạm",
       dataIndex: "name",
       key: "name",
-      // eslint-disable-next-line no-unused-vars
-      render: (v, r) => (
-        <span>
-          <HomeOutlined style={{ marginRight: 6 }} />
+      render: (v) => (
+        <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <HomeOutlined />
           {v}
         </span>
       ),
@@ -306,103 +284,186 @@ const Overview = () => {
       dataIndex: "revenue",
       key: "revenue",
       render: (v) => v?.toLocaleString("vi-VN"),
+      align: "right",
     },
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 28, fontWeight: 700 }}>
-          Báo cáo & Thống kê doanh thu
-        </h2>
-        <p style={{ color: "#666" }}>
-          Tổng hợp doanh thu từ gói đăng ký và giao dịch đổi pin.
-        </p>
-      </div>
-
-      {/* filter */}
-      <Card style={{ marginBottom: 24 }}>
-        <Row gutter={16}>
-          <Col>
-            <span style={{ marginRight: 8 }}>Khoảng thời gian:</span>
-            <Select
-              value={timeRange}
-              onChange={setTimeRange}
-              style={{ width: 160 }}
-            >
-              <Option value="day">Hôm nay</Option>
-              <Option value="week">Tuần này</Option>
-              <Option value="month">Tháng này</Option>
-              <Option value="year">Năm nay</Option>
-              <Option value="custom">Tùy chỉnh</Option>
-            </Select>
-          </Col>
+    <div
+      style={{
+        padding: 24,
+        background: "#f4f5fb",
+        minHeight: "100vh",
+      }}
+    >
+      {/* HEADER */}
+      <div
+        style={{
+          background: "#1e5de4ff",
+          borderRadius: 16,
+          padding: "20px 24px",
+          marginBottom: 24,
+          color: "#fff",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
+        <div>
+          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>
+            Báo cáo & Thống kê doanh thu
+          </h2>
+          <p style={{ margin: 0, opacity: 0.9 }}>
+            Theo dõi doanh thu từ gói đăng ký và giao dịch đổi pin.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Select
+            value={timeRange}
+            onChange={setTimeRange}
+            style={{ width: 140 }}
+            size="middle"
+          >
+            <Option value="day">Hôm nay</Option>
+            <Option value="week">Tuần này</Option>
+            <Option value="month">Tháng này</Option>
+            <Option value="year">Năm nay</Option>
+            <Option value="custom">Tùy chỉnh</Option>
+          </Select>
           {timeRange === "custom" && (
-            <Col>
-              <RangePicker
-                onChange={(dates) => setSelectedDates(dates)}
-                format="DD/MM/YYYY"
-              />
-            </Col>
+            <RangePicker
+              onChange={setSelectedDates}
+              format="DD/MM/YYYY"
+              size="middle"
+            />
           )}
-        </Row>
-      </Card>
+        </div>
+      </div>
 
       {loading ? (
         <Spin tip="Đang tải dữ liệu..." />
       ) : (
         <>
-          {/* summary cards */}
-          <Row gutter={16} style={{ marginBottom: 24 }}>
+          {/* SUMMARY CARDS */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
             <Col xs={24} sm={12} lg={6}>
-              <Card>
+              <Card
+                style={{ borderRadius: 14 }}
+                bodyStyle={{ display: "flex", gap: 16, alignItems: "center" }}
+              >
+                <div
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: "999px",
+                    background: "rgba(79,70,229,0.1)",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#4f46e5",
+                  }}
+                >
+                  <DollarOutlined />
+                </div>
                 <Statistic
-                  title="Tổng tiền từ gói đăng ký"
+                  title="Tổng tiền từ gói"
                   value={totalRevenueFromPlans}
-                  valueStyle={{ color: "#3f8600" }}
-                  prefix={<DollarOutlined />}
+                  valueStyle={{ fontSize: 20 }}
                   formatter={(v) => v.toLocaleString("vi-VN")}
                   suffix=" VND"
                 />
               </Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card>
+              <Card
+                style={{ borderRadius: 14 }}
+                bodyStyle={{ display: "flex", gap: 16, alignItems: "center" }}
+              >
+                <div
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: "999px",
+                    background: "rgba(14,165,233,0.1)",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#0ea5e9",
+                  }}
+                >
+                  <SwapOutlined />
+                </div>
                 <Statistic
-                  title="Tổng tiền từ đổi pin"
+                  title="Tổng tiền đổi pin"
                   value={totalRevenueFromSwaps}
-                  valueStyle={{ color: "#1890ff" }}
-                  prefix={<SwapOutlined />}
+                  valueStyle={{ fontSize: 20 }}
                   formatter={(v) => v.toLocaleString("vi-VN")}
                   suffix=" VND"
                 />
               </Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card>
+              <Card
+                style={{ borderRadius: 14 }}
+                bodyStyle={{ display: "flex", gap: 16, alignItems: "center" }}
+              >
+                <div
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: "999px",
+                    background: "rgba(249,115,22,0.1)",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#f97316",
+                  }}
+                >
+                  <BarChartOutlined />
+                </div>
                 <Statistic
-                  title="Tổng lượt swap (PAID/COMPLETED)"
+                  title="Số giao dịch swap"
                   value={swaps.length}
-                  valueStyle={{ color: "#cf1322" }}
                   suffix=" lượt"
+                  valueStyle={{ fontSize: 20 }}
                 />
               </Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic
-                  title="Gói bán chạy nhất"
-                  value={bestPlan ? bestPlan.name : "—"}
-                  prefix={<RiseOutlined />}
-                />
+              <Card
+                style={{ borderRadius: 14 }}
+                bodyStyle={{ display: "flex", gap: 16, alignItems: "center" }}
+              >
+                <div
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: "999px",
+                    background: "rgba(34,197,94,0.1)",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#22c55e",
+                  }}
+                >
+                  <RiseOutlined />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, color: "#999" }}>
+                    Gói bán chạy nhất
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 16 }}>
+                    {bestPlan ? bestPlan.name : "—"}
+                  </div>
+                </div>
               </Card>
             </Col>
           </Row>
 
-          {/* charts 1 */}
-          <Row gutter={16} style={{ marginBottom: 24 }}>
+          {/* CHARTS ROW 1 */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
             <Col xs={24} lg={16}>
-              <Card title="Doanh thu đổi pin theo ngày">
+              <Card
+                title="Doanh thu đổi pin theo ngày"
+                style={{ borderRadius: 14 }}
+              >
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={timeSeriesData}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -412,34 +473,35 @@ const Overview = () => {
                     />
                     <YAxis />
                     <Tooltip
-                      formatter={(value, name) => {
-                        if (name === "Doanh thu") {
-                          return [value.toLocaleString("vi-VN") + " VND", name];
-                        }
-                        return [value.toLocaleString("vi-VN") + " lượt", name];
-                      }}
+                      formatter={(value, name) =>
+                        name === "Doanh thu"
+                          ? [value.toLocaleString("vi-VN") + " VND", name]
+                          : [value.toLocaleString("vi-VN") + " lượt", name]
+                      }
                     />
                     <Legend />
                     <Line
                       type="monotone"
                       dataKey="revenue"
-                      stroke="#8884d8"
+                      stroke="#4f46e5"
                       strokeWidth={2}
                       name="Doanh thu"
+                      dot={false}
                     />
                     <Line
                       type="monotone"
                       dataKey="swaps"
-                      stroke="#82ca9d"
+                      stroke="#0ea5e9"
                       strokeWidth={2}
                       name="Số lượt đổi"
+                      dot={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </Card>
             </Col>
             <Col xs={24} lg={8}>
-              <Card title="Tỷ lệ nguồn thu">
+              <Card title="Tỷ lệ nguồn thu" style={{ borderRadius: 14 }}>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -448,9 +510,7 @@ const Overview = () => {
                       nameKey="name"
                       outerRadius={100}
                       label={(entry) =>
-                        `${entry.name}: ${entry.value.toLocaleString(
-                          "vi-VN"
-                        )} VND`
+                        `${entry.name}: ${entry.value.toLocaleString("vi-VN")}`
                       }
                     >
                       {revenueSourceData.map((entry, index) => (
@@ -471,11 +531,11 @@ const Overview = () => {
             </Col>
           </Row>
 
-          {/* charts 2 */}
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col xs={24} lg={14}>
-              <Card title="Doanh thu theo trạm">
-                <ResponsiveContainer width="100%" height={300}>
+          {/* CHARTS ROW 2 */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col xs={24} lg={12}>
+              <Card title="Doanh thu theo trạm" style={{ borderRadius: 14 }}>
+                <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={stationChartData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="station" />
@@ -486,13 +546,16 @@ const Overview = () => {
                       }
                     />
                     <Legend />
-                    <Bar dataKey="revenue" name="Doanh thu" fill="#8884d8" />
+                    <Bar dataKey="revenue" name="Doanh thu" fill="#4f46e5" />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>
             </Col>
-            <Col xs={24} lg={10}>
-              <Card title="Doanh thu theo gói đăng ký">
+            <Col xs={24} lg={12}>
+              <Card
+                title="Doanh thu theo gói đăng ký"
+                style={{ borderRadius: 14 }}
+              >
                 <Table
                   columns={planColumns}
                   dataSource={revenuePerPlan}
@@ -503,17 +566,20 @@ const Overview = () => {
             </Col>
           </Row>
 
-          {/* table stations */}
-          <Row gutter={16}>
+          {/* TABLE FULL */}
+          <Row gutter={[16, 16]}>
             <Col xs={24}>
-              <Card title="Chi tiết doanh thu theo trạm">
+              <Card
+                title="Chi tiết doanh thu theo trạm"
+                style={{ borderRadius: 14 }}
+              >
                 <Table
                   columns={stationColumns}
                   dataSource={revenueByStation.map((s, idx) => ({
                     key: s.stationId || idx,
                     ...s,
                   }))}
-                  pagination={{ pageSize: 10 }}
+                  pagination={{ pageSize: 8 }}
                 />
               </Card>
             </Col>
