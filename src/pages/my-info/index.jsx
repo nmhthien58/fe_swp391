@@ -33,6 +33,7 @@ const MyInfo = () => {
   // Vehicle state
   const [vehLoading, setVehLoading] = useState(false);
   const [vehicle, setVehicle] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [vehError, setVehError] = useState(null);
 
   const handleOpen = () => setOpen(true);
@@ -132,15 +133,6 @@ const MyInfo = () => {
         title="Thông tin người dùng"
         bordered={false}
         style={{ maxWidth: 820, margin: "32px auto", borderRadius: 10 }}
-        extra={
-          !vehicle ? (
-            <Button type="primary" onClick={handleOpen}>
-              Liên kết phương tiện để sử dụng dịch vụ đổi pin
-            </Button>
-          ) : (
-            <div></div>
-          )
-        }
       >
         <Descriptions column={1}>
           <Descriptions.Item label="Tên đăng nhập">
@@ -193,11 +185,10 @@ const MyInfo = () => {
           // ======= Đoạn đơn giản, không icon =======
           <div style={{ padding: 8 }}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>
-              {vehError || "Bạn chưa liên kết phương tiện"}
+              {"Bạn chưa liên kết phương tiện"}
             </div>
             <div style={{ color: "#595959", marginBottom: 12 }}>
-              Hãy liên kết phương tiện để đặt lịch nhanh và nhận gợi ý trạm phù
-              hợp.
+              Hãy liên kết phương tiện để sử dụng dịch vụ.
             </div>
             <Button type="primary" onClick={handleOpen}>
               Liên kết phương tiện

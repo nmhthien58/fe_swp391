@@ -142,6 +142,10 @@ export default function AppLayout() {
               key: "lich-su-dang-ky-goi",
               label: <NavLink to="/history/plans">Lịch sử đăng ký gói</NavLink>,
             },
+            {
+              key: "lich-su-booking",
+              label: <NavLink to="/history/booking">Lịch hẹn</NavLink>,
+            },
           ],
         },
         {
