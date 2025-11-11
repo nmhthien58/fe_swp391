@@ -23,6 +23,8 @@ import { toast } from "react-toastify";
 import { useSelector, useDispatch } from "react-redux";
 import { logout, selectUser } from "../../redux/accountSlice";
 import { persistor } from "../../redux/store";
+import { GiBatteries } from "react-icons/gi";
+import { BsBatteryCharging } from "react-icons/bs";
 
 const { Header, Content, Footer, Sider } = Layout;
 
@@ -54,6 +56,7 @@ const items = [
   ),
   getItem("Reports and Statistics", "overview", <PieChartOutlined size={15} />),
   getItem("Manage Ticket", "manageticket", <WarningOutlined size={15} />),
+  getItem("Manage Batteries", "batteries", <BsBatteryCharging size={15} />),
 ];
 
 const Dashboard = () => {

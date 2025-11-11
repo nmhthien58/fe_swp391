@@ -58,6 +58,7 @@ function App() {
         { path: "rentpackage", element: <ManageBatteryRentPackage /> },
         { path: "overview", element: <Overview /> },
         { path: "manageticket", element: <ManageSupportTicket /> },
+        { path: "batteries", element: <ManageStockBattery /> },
       ],
     },
 

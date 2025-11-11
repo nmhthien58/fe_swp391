@@ -728,9 +728,14 @@ const FindStation = () => {
       setBookingSubmitting(false);
     }
   };
-
-  const disablePast = (current) =>
-    current && current < dayjs().subtract(1, "minute");
+  // chỉ được đặt từ hôm nay đến tối đa 3 ngày tới
+  const disableBookingDate = (current) => {
+    if (!current) return false;
+    const today = dayjs().startOf("day");
+    const maxDay = today.add(3, "day").endOf("day");
+    // chặn ngày trước hôm nay hoặc sau 3 ngày nữa
+    return current < today || current > maxDay;
+  };
 
   // helper format VND
   const vnd = (n) =>
@@ -1199,7 +1204,7 @@ const FindStation = () => {
               showTime
               value={bookingTime}
               onChange={setBookingTime}
-              disabledDate={disablePast}
+              disabledDate={disableBookingDate}
               format="YYYY-MM-DD HH:mm"
             />
           </div>
