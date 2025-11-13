@@ -40,15 +40,16 @@ const PlanHistory = () => {
   const fmtVN = (iso) =>
     iso ? dayjs(iso).add(7, "hour").format("DD/MM/YYYY HH:mm") : "-";
 
-  const statusTag = (status, active) => {
+  const statusTag = (status) => {
     const map = {
-      ACTIVE: "green",
-      PENDING_PAYMENT: "orange",
-      EXPIRED: "red",
-      CANCELED: "red",
+      ACTIVE: { color: "green", text: "ACTIVE" },
+      PENDING_PAYMENT: { color: "orange", text: "PENDING_PAYMENT" },
+      EXPIRED: { color: "red", text: "EXPIRED" },
+      CANCELLED: { color: "red", text: "CANCELLED" },
     };
-    const color = active ? "green" : map[status] || "default";
-    return <Tag color={color}>{active ? "ACTIVE" : status || "UNKNOWN"}</Tag>;
+
+    const cfg = map[status] || { color: "default", text: status || "UNKNOWN" };
+    return <Tag color={cfg.color}>{cfg.text}</Tag>;
   };
 
   const paymentTag = (pmt) => {
@@ -153,7 +154,7 @@ const PlanHistory = () => {
       {
         title: "Trạng thái",
         key: "status",
-        render: (_, r) => statusTag(r?.status, r?.active),
+        render: (_, r) => statusTag(r?.status),
         width: 120,
       },
       {

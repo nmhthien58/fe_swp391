@@ -120,7 +120,13 @@ export default function AppLayout() {
   };
 
   const menuItems = !token
-    ? [{ key: "home", label: <NavLink to="/home">Trang chủ</NavLink> }]
+    ? [
+        { key: "home", label: <NavLink to="/home">Trang chủ</NavLink> },
+        {
+          key: "tim-tram",
+          label: <NavLink to="/stations">Tìm Trạm</NavLink>,
+        },
+      ]
     : [
         {
           key: "tim-tram",
@@ -154,7 +160,7 @@ export default function AppLayout() {
         },
       ];
 
-  const selectedMenuKey = !token ? "home" : keyByPath(location.pathname);
+  const selectedMenuKey = keyByPath(location.pathname);
 
   return (
     <>

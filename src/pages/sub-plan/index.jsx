@@ -75,6 +75,7 @@ function buildVerifyUrl(pastedUrl) {
 const Plans = () => {
   const token = useSelector(selectToken);
 
+  const [voucherCode, setVoucherCode] = useState("");
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errText, setErrText] = useState("");
@@ -157,6 +158,7 @@ const Plans = () => {
         amountVnd: Number(selectedPlan.price || 0),
         swapId: 0,
         cashierStaffId: 0,
+        voucherCode: voucherCode?.trim() || null,
       };
 
       const payRes = await api.post("/api/payments/create", payBody, {
@@ -527,8 +529,18 @@ const Plans = () => {
                 onChange={(e) => setPaymentMethod(e.target.value)}
               >
                 <Radio value="CARD">Thanh toán online (VNPay)</Radio>
-                <Radio value="CASH">Tiền mặt</Radio>
+                {/* <Radio value="CASH">Tiền mặt</Radio> */}
               </Radio.Group>
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <Text strong>Mã giảm giá (nếu có):</Text>
+              <Input
+                placeholder="Nhập mã voucher..."
+                value={voucherCode}
+                onChange={(e) => setVoucherCode(e.target.value)}
+                maxLength={50}
+                style={{ marginTop: 6 }}
+              />
             </div>
           </Space>
         ) : (

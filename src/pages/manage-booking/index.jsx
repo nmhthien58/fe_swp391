@@ -27,6 +27,7 @@ import {
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import api from "../../config/axios";
+import { toast } from "react-toastify";
 
 dayjs.extend(utc);
 
@@ -85,6 +86,7 @@ export default function ManageSwap() {
   // modal pay
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [payForm] = Form.useForm();
+  const method = Form.useWatch("method", payForm);
   const [payingSwap, setPayingSwap] = useState(null);
 
   // modal inspect
@@ -265,14 +267,24 @@ export default function ManageSwap() {
   const submitPay = async () => {
     try {
       const values = await payForm.validateFields();
-      await api.post(PAY_SWAP_URL(payingSwap.swapId), values);
-      message.success("Thanh toán thành công");
+
+      // Nếu chọn SUBSCRIPTION → override amountVnd & voucherId = 0
+      let payload = { ...values };
+
+      if (values.method === "SUBSCRIPTION") {
+        payload.amountVnd = 0;
+        payload.voucherId = 0;
+      }
+
+      await api.post(PAY_SWAP_URL(payingSwap.swapId), payload);
+
+      toast.success("Thanh toán thành công");
       setPayModalOpen(false);
       setPayingSwap(null);
       fetchAll();
     } catch (e) {
       console.error(e);
-      message.error(e?.response?.data?.message || "Thanh toán thất bại.");
+      toast.error(e?.response?.data?.message || "Thanh toán thất bại.");
     }
   };
 
@@ -323,6 +335,14 @@ export default function ManageSwap() {
       key: "driverId",
       width: 90,
     },
+    {
+      title: "ID Pin đã đặt",
+      dataIndex: "reservedBatteryId",
+      key: "reservedBatteryId",
+      width: 110,
+      render: (v) => (v != null ? v : "-"),
+    },
+
     {
       title: "Trạm",
       dataIndex: "stationId",
@@ -554,8 +574,8 @@ export default function ManageSwap() {
           />
         </TabPane>
       </Tabs>
-
       {/* PAY MODAL */}
+
       <Modal
         open={payModalOpen}
         title={`Thanh toán swap #${payingSwap?.swapId || ""}`}
@@ -573,20 +593,29 @@ export default function ManageSwap() {
             <Select
               options={[
                 { value: "CASH", label: "CASH" },
-                { value: "VNPAY", label: "VNPAY" },
+                { value: "SUBSCRIPTION", label: "SUBSCRIPTION" },
               ]}
             />
           </Form.Item>
-          <Form.Item
-            label="Số tiền (VND)"
-            name="amountVnd"
-            rules={[{ required: true, message: "Nhập số tiền" }]}
-          >
-            <InputNumber min={0} style={{ width: "100%" }} />
-          </Form.Item>
+
+          {/* ẨN nếu là SUBSCRIPTION */}
+          {method !== "SUBSCRIPTION" && (
+            <Form.Item
+              label="Số tiền (VND)"
+              name="amountVnd"
+              rules={[{ required: true, message: "Nhập số tiền" }]}
+            >
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          )}
+
+          {method !== "SUBSCRIPTION" && (
+            <Form.Item label="Mã giảm giá (ID)" name="voucherId">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          )}
         </Form>
       </Modal>
-
       {/* INSPECT MODAL */}
       <Modal
         open={inspectModalOpen}
