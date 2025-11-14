@@ -10,6 +10,7 @@ import {
   InputNumber,
   Input,
   Popconfirm,
+  Tooltip,
 } from "antd";
 import {
   PlusOutlined,
@@ -21,7 +22,7 @@ import { toast } from "react-toastify";
 import api from "../../config/axios";
 
 const currencyVN = (n) =>
-  typeof n === "number" ? n.toLocaleString("vi-VN") : n;
+  typeof n === "number" ? n.toLocaleString("vi-VN") + " đ" : n;
 
 const dateVN = (s) => {
   if (!s) return "";
@@ -33,10 +34,10 @@ const ManageBatteryRentPackage = () => {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Modal state
+  // Modal
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
-  const [editingId, setEditingId] = useState(null); // null = create, number = edit
+  const [editingId, setEditingId] = useState(null); // null = tạo mới, số = chỉnh sửa
 
   const fetchPlans = async () => {
     try {
@@ -46,7 +47,7 @@ const ManageBatteryRentPackage = () => {
       setPlans(data);
     } catch (err) {
       console.error(err);
-      toast.error("Không tải được danh sách gói thuê.");
+      toast.error("Không tải được danh sách gói thuê pin.");
     } finally {
       setLoading(false);
     }
@@ -91,12 +92,11 @@ const ManageBatteryRentPackage = () => {
       setLoading(true);
       if (editingId == null) {
         await api.post("/api/subscription-plans/create", payload);
-        toast.success("Tạo gói thuê thành công!");
+        toast.success("Tạo gói thuê pin thành công!");
       } else {
         await api.put(`/api/subscription-plans/update/${editingId}`, payload);
-        toast.success("Cập nhật gói thuê thành công!");
+        toast.success("Cập nhật gói thuê pin thành công!");
       }
-      // đóng modal + reset form + fetch lại danh sách
       setOpen(false);
       form.resetFields();
       await fetchPlans();
@@ -111,111 +111,126 @@ const ManageBatteryRentPackage = () => {
   const handleDelete = async (planId) => {
     try {
       setLoading(true);
-      await api.delete(`/api/subscription-plans/${planId}`); // Deactivate
-      toast.success("Đã vô hiệu hóa gói thuê thành công!");
+      await api.delete(`/api/subscription-plans/${planId}`); // deactivate
+      toast.success("Đã vô hiệu hóa gói thuê pin!");
       await fetchPlans();
     } catch (err) {
       console.error(err);
-      toast.error("Không thể vô hiệu hóa gói thuê.");
+      toast.error("Không thể vô hiệu hóa gói thuê pin.");
     } finally {
       setLoading(false);
     }
   };
 
   const columns = [
-    { title: "Plan ID", dataIndex: "planId", key: "planId", width: 100 },
-    { title: "Name", dataIndex: "name", key: "name", ellipsis: true },
+    { title: "Mã gói", dataIndex: "planId", key: "planId", width: 90 },
+
     {
-      title: "Description",
-      dataIndex: "description",
-      key: "description",
+      title: "Tên gói",
+      dataIndex: "name",
+      key: "name",
+      width: 240,
       ellipsis: true,
+      render: (text) => <Tooltip title={text}>{text}</Tooltip>,
     },
     {
-      title: "Price (VND)",
+      title: "Mô tả",
+      dataIndex: "description",
+      key: "description",
+      width: 340,
+      ellipsis: true,
+      render: (text) => <Tooltip title={text}>{text}</Tooltip>,
+    },
+    {
+      title: "Giá gói",
       dataIndex: "price",
       key: "price",
       align: "right",
-      width: 140,
+      width: 130,
       render: (v) => currencyVN(v),
     },
     {
-      title: "Duration (days)",
+      title: "Thời hạn (ngày)",
       dataIndex: "durationDays",
       key: "durationDays",
       align: "center",
-      width: 140,
+      width: 100,
       render: (v) => (v != null ? `${v}` : ""),
     },
     {
-      title: "Swap limit",
+      title: "Giới hạn lượt swap",
       dataIndex: "swapLimit",
       key: "swapLimit",
       align: "center",
-      width: 120,
-      render: (v) => (v != null ? `${v}` : "—"),
+      width: 100,
+      render: (v) => (v != null ? `${v}` : "Không giới hạn"),
     },
     {
-      title: "Price / swap (VND)",
+      title: "Giá / lượt swap",
       dataIndex: "pricePerSwap",
       key: "pricePerSwap",
       align: "right",
-      width: 170,
+      width: 120,
       render: (v) => currencyVN(v),
     },
     {
-      title: "Extra swap (VND)",
+      title: "Giá lượt vượt",
       dataIndex: "pricePerExtraSwap",
       key: "pricePerExtraSwap",
       align: "right",
-      width: 170,
+      width: 120,
       render: (v) => currencyVN(v),
     },
     {
-      title: "Status",
+      title: "Trạng thái",
       dataIndex: "active",
       key: "active",
       width: 120,
       render: (active) => (
         <Tag color={active ? "green" : "red"}>
-          {active ? "ACTIVE" : "INACTIVE"}
+          {active ? "Đang bán" : "Đã vô hiệu hóa"}
         </Tag>
       ),
     },
     {
-      title: "Created / Updated",
+      title: "Thời gian tạo / cập nhật",
       key: "timestamps",
-      width: 250,
+      width: 260,
       render: (_, r) => (
         <Space direction="vertical" size={0}>
-          <span>Created: {dateVN(r.createdAt)}</span>
-          <span>Updated: {dateVN(r.updatedAt)}</span>
+          <span style={{ fontSize: 12, color: "#64748b" }}>
+            Tạo: {dateVN(r.createdAt)}
+          </span>
+          <span style={{ fontSize: 12, color: "#64748b" }}>
+            Cập nhật: {dateVN(r.updatedAt)}
+          </span>
         </Space>
       ),
     },
     {
-      title: "Action",
+      title: "Thao tác",
       key: "action",
       fixed: "right",
-      width: 180,
+      width: 190,
       render: (_, record) => (
         <Space>
           <Button
             icon={<EditOutlined />}
             onClick={() => openEdit(record)}
             type="primary"
+            size="small"
           >
-            Edit
+            Sửa
           </Button>
           <Popconfirm
-            title="Deactivate plan?"
-            description="Gói sẽ bị vô hiệu hóa (DELETE API)."
-            okText="Yes"
-            cancelText="No"
+            title="Vô hiệu hóa gói thuê?"
+            description="Gói sẽ bị vô hiệu hóa và không thể đăng ký mới."
+            okText="Vô hiệu hóa"
+            cancelText="Hủy"
             onConfirm={() => handleDelete(record.planId)}
           >
-            <Button icon={<DeleteOutlined />} danger>
-              Delete
+            <Button icon={<DeleteOutlined />} danger size="small">
+              Vô hiệu hóa
             </Button>
           </Popconfirm>
         </Space>
@@ -225,31 +240,72 @@ const ManageBatteryRentPackage = () => {
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-8">
-        <h2 className="text-3xl font-bold text-gray-800 pb-2 m-0">
-          Manage Battery Rent Package
-        </h2>
-        <Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            Add Plan
+      {/* Header đẹp + tiếng Việt */}
+      <div
+        style={{
+          marginBottom: 24,
+          padding: 16,
+          borderRadius: 12,
+          background:
+            "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(45,212,191,0.08))",
+          border: "1px solid rgba(148,163,184,0.35)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: "#0f172a",
+              marginBottom: 4,
+            }}
+          >
+            Quản lý gói thuê pin
+          </div>
+          <div style={{ color: "#64748b", fontSize: 13 }}>
+            Tạo, chỉnh sửa và vô hiệu hóa các gói thuê pin theo tháng / số lượt
+            swap.
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreate}
+            style={{
+              fontWeight: 600,
+              borderRadius: 8,
+              boxShadow: "0 6px 16px rgba(59,130,246,0.35)",
+            }}
+          >
+            Thêm gói thuê
           </Button>
-        </Space>
+        </div>
       </div>
 
+      {/* Bảng danh sách gói */}
       <Table
         loading={loading}
         columns={columns}
         dataSource={plans}
         rowKey="planId"
         bordered
+        size="middle"
         scroll={{ x: 1100 }}
       />
 
+      {/* Modal tạo / sửa gói */}
       <Modal
         title={
           editingId == null
-            ? "Create Subscription Plan"
-            : `Edit Plan #${editingId}`
+            ? "Tạo gói thuê pin"
+            : `Chỉnh sửa gói thuê #${editingId}`
         }
         open={open}
         onOk={() => form.submit()}
@@ -259,7 +315,8 @@ const ManageBatteryRentPackage = () => {
         }}
         destroyOnClose
         width={700}
-        okText={editingId == null ? "Create" : "Save"}
+        okText={editingId == null ? "Tạo gói" : "Lưu thay đổi"}
+        cancelText="Hủy"
         confirmLoading={loading}
       >
         <Form
@@ -269,28 +326,28 @@ const ManageBatteryRentPackage = () => {
           preserve={false}
         >
           <Form.Item
-            label="Name"
+            label="Tên gói"
             name="name"
             rules={[
               { required: true, message: "Vui lòng nhập tên gói!" },
-              { min: 2, message: "Tên tối thiểu 2 ký tự." },
+              { min: 2, message: "Tên gói phải tối thiểu 2 ký tự." },
             ]}
           >
-            <Input placeholder="Ví dụ: Gói tháng 1" />
+            <Input placeholder="Ví dụ: Gói tháng 1, Gói Premium..." />
           </Form.Item>
 
           <Form.Item
-            label="Description"
+            label="Mô tả"
             name="description"
             rules={[{ required: true, message: "Vui lòng nhập mô tả!" }]}
           >
-            <Input.TextArea placeholder="Mô tả ngắn..." rows={3} />
+            <Input.TextArea placeholder="Mô tả ngắn về gói thuê..." rows={3} />
           </Form.Item>
 
           <Form.Item
-            label="Price (VND)"
+            label="Giá gói (VND)"
             name="price"
-            rules={[{ required: true, message: "Vui lòng nhập giá!" }]}
+            rules={[{ required: true, message: "Vui lòng nhập giá gói!" }]}
           >
             <InputNumber
               min={0}
@@ -304,7 +361,7 @@ const ManageBatteryRentPackage = () => {
           </Form.Item>
 
           <Form.Item
-            label="Duration (days)"
+            label="Thời hạn (ngày)"
             name="durationDays"
             rules={[{ required: true, message: "Vui lòng nhập số ngày!" }]}
           >
@@ -312,20 +369,30 @@ const ManageBatteryRentPackage = () => {
           </Form.Item>
 
           <Form.Item
-            label="Swap limit"
+            label="Giới hạn lượt swap"
             name="swapLimit"
             rules={[
-              { required: true, message: "Vui lòng nhập giới hạn swap!" },
+              {
+                required: true,
+                message: "Vui lòng nhập giới hạn lượt swap!",
+              },
             ]}
           >
-            <InputNumber min={0} className="w-full" placeholder="VD: 9" />
+            <InputNumber
+              min={0}
+              className="w-full"
+              placeholder="VD: 9 (0 = không giới hạn)"
+            />
           </Form.Item>
 
           <Form.Item
-            label="Price per swap (VND)"
+            label="Giá mỗi lượt swap (VND)"
             name="pricePerSwap"
             rules={[
-              { required: true, message: "Vui lòng nhập giá mỗi lần swap!" },
+              {
+                required: true,
+                message: "Vui lòng nhập giá mỗi lượt swap!",
+              },
             ]}
           >
             <InputNumber
@@ -340,10 +407,13 @@ const ManageBatteryRentPackage = () => {
           </Form.Item>
 
           <Form.Item
-            label="Extra swap price (VND)"
+            label="Giá cho mỗi lượt swap thêm (VND)"
             name="pricePerExtraSwap"
             rules={[
-              { required: true, message: "Vui lòng nhập giá swap thêm!" },
+              {
+                required: true,
+                message: "Vui lòng nhập giá swap thêm!",
+              },
             ]}
           >
             <InputNumber

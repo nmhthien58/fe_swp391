@@ -667,6 +667,7 @@ const FindStation = () => {
   };
 
   // ==== Active subscription from HISTORY ====
+  // ==== Active subscription from HISTORY (support response mới) ====
   const fetchActiveSubscription = async (driverId) => {
     if (!driverId) {
       setActiveSub(null);
@@ -682,9 +683,38 @@ const FindStation = () => {
         `/api/driver-subscriptions/${driverId}/history`
       );
 
-      const list = Array.isArray(res.data) ? res.data : [];
+      const rawList = Array.isArray(res.data) ? res.data : [];
 
-      // ưu tiên status === "ACTIVE"
+      // Chuẩn hóa để hỗ trợ cả dạng cũ (có plan) và dạng mới (phẳng như em gửi)
+      const list = rawList.map((item) => {
+        // Nếu BE cũ: đã có item.plan thì giữ nguyên
+        if (item.plan) return item;
+
+        // BE mới: phẳng -> build object plan từ các field phẳng
+        const {
+          planName,
+          swapLimit,
+          // nếu BE có thêm các field khác thì lấy thêm ở đây
+          price,
+          durationDays,
+          pricePerSwap,
+          pricePerExtraSwap,
+        } = item;
+
+        return {
+          ...item,
+          plan: {
+            name: planName || "Gói đăng ký",
+            swapLimit: swapLimit,
+            price: price,
+            durationDays: durationDays,
+            pricePerSwap: pricePerSwap,
+            pricePerExtraSwap: pricePerExtraSwap,
+          },
+        };
+      });
+
+      // Ưu tiên status === "ACTIVE", sau đó tới active === true
       let found =
         list.find((s) => s.status === "ACTIVE") ||
         list.find((s) => s.active === true);
@@ -695,7 +725,7 @@ const FindStation = () => {
         setPlanError("Bạn chưa đăng ký gói đang hoạt động.");
       } else {
         setActiveSub(found);
-        setActivePlan(found.plan);
+        setActivePlan(found.plan); // vẫn dùng như cũ
       }
     } catch (err) {
       setActiveSub(null);
@@ -1105,14 +1135,14 @@ const FindStation = () => {
                               gap: 10,
                             }}
                           >
-                            <div>
+                            {/* <div>
                               <Text type="secondary">Giá gói</Text>
                               <div>{vnd(activePlan.price)}</div>
                             </div>
                             <div>
                               <Text type="secondary">Thời hạn</Text>
                               <div>{activePlan.durationDays ?? "-"} ngày</div>
-                            </div>
+                            </div> */}
                             <div>
                               <Text type="secondary">Ngày bắt đầu</Text>
                               <div>{fmtVN(activeSub.startDate)}</div>
@@ -1131,11 +1161,11 @@ const FindStation = () => {
                             </div>
                             <div>
                               <Text type="secondary">Giá mỗi lần đổi</Text>
-                              <div>{vnd(activePlan.pricePerSwap)}</div>
+                              <div>{vnd(0)}</div>
                             </div>
                             <div>
                               <Text type="secondary">Giá cho lượt vượt</Text>
-                              <div>{vnd(activePlan.pricePerExtraSwap)}</div>
+                              <div>{vnd(20000)}</div>
                             </div>
                           </div>
                         </div>

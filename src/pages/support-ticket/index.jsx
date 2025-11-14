@@ -184,13 +184,7 @@ const Support = () => {
         return <Tag>{v}</Tag>;
       },
     },
-    {
-      title: "Danh mục",
-      dataIndex: "category",
-      key: "category",
-      width: 140,
-      render: (v) => <Tag color="geekblue">{CATEGORY_MAP[v] || v || "—"}</Tag>,
-    },
+
     {
       title: "Trạng thái",
       dataIndex: "status",

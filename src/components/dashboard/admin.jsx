@@ -38,25 +38,12 @@ function getItem(label, key, icon) {
 }
 
 const items = [
-  getItem(
-    <span style={{ fontWeight: 700, fontSize: "16px" }}>Homepage</span>,
-    "/",
-    <HomeFilled style={{ fontSize: "16px" }} />
-  ),
-  {
-    type: "divider",
-    style: { backgroundColor: "rgba(255, 255, 255, 0.3)", margin: "8px 16px" },
-  },
-  getItem("Manage Station", "station", <FaChargingStation size={15} />),
-  getItem("Manage User", "user", <IoPeopleOutline size={15} />),
-  getItem(
-    "Manage Battery Rent Package",
-    "rentpackage",
-    <PiPackage size={15} />
-  ),
-  getItem("Reports and Statistics", "overview", <PieChartOutlined size={15} />),
-  getItem("Manage Ticket", "manageticket", <WarningOutlined size={15} />),
-  getItem("Manage Batteries", "batteries", <BsBatteryCharging size={15} />),
+  getItem("Quản lý trạm", "station", <FaChargingStation size={15} />),
+  getItem("Quản lý User", "user", <IoPeopleOutline size={15} />),
+  getItem("Quản lý gói dịch vụ", "rentpackage", <PiPackage size={15} />),
+  getItem("Thống kê & Báo cáo", "overview", <PieChartOutlined size={15} />),
+  getItem("Quản lý vé hỗ trợ", "manageticket", <WarningOutlined size={15} />),
+  getItem("Quản lý pin", "batteries", <BsBatteryCharging size={15} />),
 ];
 
 const Dashboard = () => {
@@ -118,12 +105,53 @@ const Dashboard = () => {
         collapsible
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
+        style={{
+          background:
+            "radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%)",
+          boxShadow: "2px 0 16px rgba(15,23,42,0.7)",
+          borderRight: "1px solid rgba(15,23,42,0.9)",
+        }}
       >
+        {/* Logo + tiêu đề (clickable) */}
+        <div
+          onClick={() => navigate("/")}
+          style={{
+            height: 64,
+            display: "flex",
+            alignItems: "center",
+            padding: collapsed ? "0 12px" : "0 18px",
+            gap: 10,
+            borderBottom: "1px solid rgba(55,65,81,0.7)",
+            cursor: "pointer",
+          }}
+        >
+          {!collapsed && (
+            <div style={{ lineHeight: 1.2 }}>
+              <div
+                style={{
+                  color: "#e5e7eb",
+                  fontWeight: 700,
+                  fontSize: 16,
+                  letterSpacing: 0.2,
+                }}
+              >
+                EV Battery Swap Station
+              </div>
+              <div style={{ color: "#9ca3af", fontSize: 11 }}>Admin page</div>
+            </div>
+          )}
+        </div>
+
         <Menu
           theme="dark"
           selectedKeys={[selectedKey]}
           mode="inline"
           items={items}
+          style={{
+            background: "transparent",
+            paddingTop: 8,
+            borderRight: 0,
+          }}
         />
       </Sider>
 
@@ -132,14 +160,38 @@ const Dashboard = () => {
         <Header
           style={{
             padding: "0 24px",
-            background: "#fff",
+            background:
+              "linear-gradient(90deg, #f9fafb 0%, #eef2ff 45%, #eff6ff 100%)",
             display: "flex",
-            justifyContent: "flex-end",
+            justifyContent: "space-between",
             alignItems: "center",
             height: 64,
-            borderBottom: "1px solid #f0f0f0",
+            borderBottom: "1px solid #e5e7eb",
+            boxShadow: "0 2px 8px rgba(15,23,42,0.08)",
           }}
         >
+          {/* Title bên trái */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                fontWeight: 600,
+                fontSize: 16,
+                color: "#111827",
+              }}
+            >
+              Admin Dashboard
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                color: "#6b7280",
+              }}
+            >
+              EV Battery Swap Station Management
+            </span>
+          </div>
+
+          {/* User dropdown bên phải */}
           <Dropdown
             menu={{ items: itemsDropdown }}
             trigger={["click"]}
@@ -154,13 +206,16 @@ const Dashboard = () => {
                 gap: 8,
                 padding: "0 12px",
                 fontWeight: 500,
-                color: "#1677ff",
+                color: "#1d4ed8",
+                borderRadius: 999,
+                boxShadow: "0 0 0 1px rgba(59,130,246,0.15)",
+                background: "rgba(255,255,255,0.9)",
               }}
             >
               <Avatar
                 size={28}
                 style={{
-                  backgroundColor: "#1677ff",
+                  background: "linear-gradient(135deg, #2563eb, #22c55e)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -180,7 +235,8 @@ const Dashboard = () => {
               padding: 24,
               minHeight: 360,
               background: "#fff",
-              borderRadius: 8,
+              borderRadius: 12,
+              boxShadow: "0 10px 40px rgba(15,23,42,0.06)",
             }}
           >
             <Outlet />

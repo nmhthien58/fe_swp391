@@ -24,6 +24,7 @@ const PlanHistory = () => {
 
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
+  const [plans, setPlans] = useState([]); // <--- NEW
   const [err, setErr] = useState(null);
   const [q, setQ] = useState("");
 
@@ -52,13 +53,28 @@ const PlanHistory = () => {
     return <Tag color={cfg.color}>{cfg.text}</Tag>;
   };
 
-  const paymentTag = (pmt) => {
-    if (!pmt) return <Tag>—</Tag>;
-    const map = { SUCCESS: "green", FAILED: "red", PENDING: "orange" };
-    return <Tag color={map[pmt.status] || "default"}>{pmt.status}</Tag>;
-  };
+  // const paymentTag = (pmt) => {
+  //   if (!pmt) return <Tag>—</Tag>;
+  //   const map = { SUCCESS: "green", FAILED: "red", PENDING: "orange" };
+  //   return <Tag color={map[pmt.status] || "default"}>{pmt.status}</Tag>;
+  // };
 
-  // fetch
+  // 🟦 1) Fetch danh sách subscription plan
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const res = await api.get("/api/subscription-plans/all");
+        const list = res?.data?.result || [];
+        setPlans(list);
+      } catch (e) {
+        console.warn("Không tải được danh sách plan:", e);
+        setPlans([]);
+      }
+    };
+    run();
+  }, []);
+
+  // 🟦 2) Fetch lịch sử subscriptions
   useEffect(() => {
     const run = async () => {
       if (!driverId) {
@@ -67,11 +83,40 @@ const PlanHistory = () => {
       }
       setLoading(true);
       setErr(null);
+
       try {
         const res = await api.get(
           `/api/driver-subscriptions/${driverId}/history`
         );
-        const data = Array.isArray(res.data) ? res.data : [];
+        const raw = Array.isArray(res.data) ? res.data : [];
+
+        const data = raw.map((item) => {
+          if (item.plan) return item;
+
+          const {
+            planName,
+            swapLimit,
+            price,
+            durationDays,
+            pricePerSwap,
+            pricePerExtraSwap,
+            description,
+          } = item;
+
+          return {
+            ...item,
+            plan: {
+              name: planName || "Gói đăng ký",
+              swapLimit: swapLimit,
+              price: price,
+              durationDays: durationDays,
+              pricePerSwap: pricePerSwap,
+              pricePerExtraSwap: pricePerExtraSwap,
+              description: description,
+            },
+          };
+        });
+
         setRows(data);
       } catch (e) {
         const msg = e?.response?.data?.message || "Không tải được lịch sử gói.";
@@ -97,12 +142,24 @@ const PlanHistory = () => {
     });
   }, [rows, q]);
 
-  // tổng tiền thanh toán thành công
-  const totalPaid = useMemo(() => {
+  // 🟦 Tổng tiền đã thanh toán thành công
+  // const totalPaid = useMemo(() => {
+  //   return data
+  //     .filter((r) => r?.payment?.status === "SUCCESS")
+  //     .reduce((sum, r) => sum + (r?.payment?.amountVnd || 0), 0);
+  // }, [data]);
+
+  // 🟦 NEW: Tổng tiền từ các gói ACTIVE theo bảng plan
+  const totalActivePlanPrice = useMemo(() => {
+    if (!plans.length) return 0;
+
     return data
-      .filter((r) => r?.payment?.status === "SUCCESS")
-      .reduce((sum, r) => sum + (r?.payment?.amountVnd || 0), 0);
-  }, [data]);
+      .filter((r) => r.status === "ACTIVE" || r.active === true)
+      .reduce((sum, r) => {
+        const p = plans.find((pl) => pl.name === r.plan?.name);
+        return sum + (p?.price || 0);
+      }, 0);
+  }, [data, plans]);
 
   const columns = useMemo(
     () => [
@@ -125,19 +182,28 @@ const PlanHistory = () => {
             )}
           </Space>
         ),
-        ellipsis: true,
+        width: 300,
       },
       {
         title: "Giá",
         key: "price",
-        render: (_, r) => vnd(r?.plan?.price),
+        render: (_, r) => {
+          const p = plans.find((pl) => pl.name === r.plan?.name);
+          // fallback: nếu không tìm thấy trong plans thì lấy từ r.plan
+          const price = p?.price ?? r?.plan?.price;
+          return vnd(price);
+        },
         width: 120,
       },
       {
         title: "Thời hạn",
-        key: "duration",
-        render: (_, r) => (r?.plan?.durationDays ?? "-") + " ngày",
-        width: 100,
+        key: "durationDays",
+        render: (_, r) => {
+          const p = plans.find((pl) => pl.name === r.plan?.name);
+          const duration = p?.durationDays ?? r?.plan?.durationDays;
+          return duration ? `${duration} ngày` : "-";
+        },
+        width: 120,
       },
       {
         title: "Bắt đầu",
@@ -157,19 +223,19 @@ const PlanHistory = () => {
         render: (_, r) => statusTag(r?.status),
         width: 120,
       },
-      {
-        title: "Thanh toán",
-        key: "payment",
-        render: (_, r) => (
-          <Space direction="vertical" size={0}>
-            {paymentTag(r?.payment)}
-            {r?.payment?.amountVnd != null && (
-              <Text style={{ fontSize: 12 }}>{vnd(r.payment.amountVnd)}</Text>
-            )}
-          </Space>
-        ),
-        width: 140,
-      },
+      // {
+      //   title: "Thanh toán",
+      //   key: "payment",
+      //   render: (_, r) => (
+      //     <Space direction="vertical" size={0}>
+      //       {paymentTag(r?.payment)}
+      //       {r?.payment?.amountVnd != null && (
+      //         <Text style={{ fontSize: 12 }}>{vnd(r.payment.amountVnd)}</Text>
+      //       )}
+      //     </Space>
+      //   ),
+      //   width: 140,
+      // },
     ],
     []
   );
@@ -205,8 +271,8 @@ const PlanHistory = () => {
           />
         </Space>
 
-        {/* Tổng tiền hiển thị đơn giản */}
-        <div
+        {/* Tổng tiền đã thanh toán */}
+        {/* <div
           style={{
             background: "#f6ffed",
             border: "1px solid #b7eb8f",
@@ -215,10 +281,27 @@ const PlanHistory = () => {
           }}
         >
           <Text strong style={{ fontSize: 15 }}>
-            Tổng tiền đã thanh toán thành công:
+            Tổng tiền thanh toán thành công:
           </Text>{" "}
           <Text style={{ fontSize: 15, color: "#1677ff", fontWeight: 600 }}>
             {vnd(totalPaid)}
+          </Text>
+        </div> */}
+
+        {/* NEW: Tổng tiền gói active */}
+        <div
+          style={{
+            background: "#e6f7ff",
+            border: "1px solid #91d5ff",
+            borderRadius: 8,
+            padding: "10px 16px",
+          }}
+        >
+          <Text strong style={{ fontSize: 15 }}>
+            Tổng tiền đã thanh toán:
+          </Text>{" "}
+          <Text style={{ fontSize: 15, color: "#096dd9", fontWeight: 600 }}>
+            {vnd(totalActivePlanPrice)}
           </Text>
         </div>
 

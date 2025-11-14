@@ -1,3 +1,4 @@
+// src/pages/ManageStation.jsx
 import React, { useEffect, useState } from "react";
 import {
   Button,
@@ -91,7 +92,7 @@ const ManageStation = () => {
       });
     } catch (err) {
       console.error("Fetch stations error:", err);
-      toast.error("Không tải được danh sách trạm. (cần quyền admin?)");
+      toast.error("Không tải được danh sách trạm (cần quyền admin?).");
     } finally {
       setLoading(false);
     }
@@ -100,12 +101,12 @@ const ManageStation = () => {
   const handleDelete = async (stationId) => {
     try {
       await api.delete(`/api/stations/${stationId}`);
-      toast.success("Đã xóa station!");
+      toast.success("Đã xóa trạm thành công!");
       setExpandedRowKeys((prev) => prev.filter((k) => k !== stationId));
       fetchStations();
     } catch (err) {
       console.error("Delete station error:", err);
-      toast.error("Xóa station thất bại.");
+      toast.error("Xóa trạm thất bại.");
     }
   };
 
@@ -125,7 +126,7 @@ const ManageStation = () => {
       Number.isNaN(payload.longitude) ||
       Number.isNaN(payload.capacity)
     ) {
-      toast.error("Latitude, longitude, hoặc capacity phải là số hợp lệ!");
+      toast.error("Vĩ độ, kinh độ hoặc sức chứa phải là số hợp lệ!");
       return;
     }
 
@@ -135,7 +136,7 @@ const ManageStation = () => {
           ...payload,
           imageUrl: undefined,
         });
-        toast.success("Cập nhật station thành công!");
+        toast.success("Cập nhật trạm thành công!");
       } else {
         const fd = new FormData();
         const file = values.image?.[0]?.originFileObj;
@@ -152,7 +153,7 @@ const ManageStation = () => {
           },
         });
 
-        toast.success("Tạo mới station thành công!");
+        toast.success("Tạo trạm mới thành công!");
       }
 
       setOpen(false);
@@ -163,7 +164,7 @@ const ManageStation = () => {
       const msg =
         err.response?.data?.message ||
         err.response?.data?.error ||
-        "Tạo/sửa station thất bại.";
+        "Tạo / sửa trạm thất bại.";
       toast.error(msg);
     }
   };
@@ -200,7 +201,7 @@ const ManageStation = () => {
       setBatteriesByStation((m) => ({ ...m, [sid]: batteries }));
     } catch (e) {
       console.error("Load batteries error:", e);
-      toast.error("Không tải được danh sách batteries cho trạm này.");
+      toast.error("Không tải được danh sách pin cho trạm này.");
       setBatteriesByStation((m) => ({ ...m, [sid]: [] }));
     } finally {
       setLoadingBatteries((m) => ({ ...m, [sid]: false }));
@@ -214,28 +215,26 @@ const ManageStation = () => {
     setHistoryLoading(true);
     try {
       const id = battery.batteryId ?? battery.id;
-      // Ưu tiên endpoint /history; fallback sang /logs
+      // eslint-disable-next-line no-unused-vars
       let rows = [];
-      try {
-        const res = await api.get(`/api/batteries/${id}/history`);
-        rows = res?.data?.result || res?.data || [];
-      } catch {
-        const res2 = await api.get(`/api/batteries/${id}/logs`);
-        rows = res2?.data?.result || res2?.data || [];
-      }
-      // Chuẩn hóa cột hiển thị cơ bản
-      const norm = (Array.isArray(rows) ? rows : []).map((x, i) => ({
+      // /history trả về giống hình bạn gửi (content + pageable)
+      const res = await api.get(`/api/batteries/${id}/history`);
+      const raw = res?.data?.content || res?.data?.result || res?.data || [];
+
+      const norm = (Array.isArray(raw) ? raw : []).map((x, i) => ({
         key: i,
         time: x.time || x.timestamp || x.createdAt || x.updatedAt,
-        event: x.event || x.type || x.action || "-",
+        event: x.event || x.type || x.action || "",
         note: x.note || x.description || x.notes || "",
         stationId: x.stationId ?? x.station?.id ?? null,
+        stationName: x.stationName || x.station?.name || "",
         raw: x,
       }));
+
       setHistoryRows(norm);
     } catch (e) {
       console.error(e);
-      toast.error("Không tải được lịch sử pin.");
+      toast.error("Không tải được lịch sử sử dụng pin.");
       setHistoryRows([]);
     } finally {
       setHistoryLoading(false);
@@ -248,15 +247,8 @@ const ManageStation = () => {
     setHealthLoading(true);
     try {
       const id = battery.batteryId ?? battery.id;
-      // Ưu tiên endpoint /health; fallback sang /{id}
-      let data = null;
-      try {
-        const res = await api.get(`/api/batteries/${id}/health`);
-        data = res?.data?.result || res?.data || null;
-      } catch {
-        const res2 = await api.get(`/api/batteries/${id}`);
-        data = res2?.data?.health || res2?.data || null;
-      }
+      const res = await api.get(`/api/batteries/${id}/health`);
+      const data = res?.data?.result || res?.data || null;
       setHealthData(data);
     } catch (e) {
       console.error(e);
@@ -295,10 +287,19 @@ const ManageStation = () => {
 
   // ======= Columns =======
   const batteryCols = [
-    { title: "ID", dataIndex: "batteryId", key: "batteryId", width: 90 },
-    { title: "Serial", dataIndex: "serialNumber", key: "serialNumber" },
     {
-      title: "Status",
+      title: "Mã pin",
+      dataIndex: "batteryId",
+      key: "batteryId",
+      width: 90,
+    },
+    {
+      title: "Mã serial",
+      dataIndex: "serialNumber",
+      key: "serialNumber",
+    },
+    {
+      title: "Trạng thái",
       dataIndex: "status",
       key: "status",
       render: (status) => {
@@ -318,7 +319,7 @@ const ManageStation = () => {
       },
     },
     {
-      title: "Capacity (Wh)",
+      title: "Dung lượng (Wh)",
       dataIndex: "capacityWh",
       key: "capacityWh",
       width: 130,
@@ -330,15 +331,15 @@ const ManageStation = () => {
       render: (v) => v || "-",
     },
     {
-      title: "Action",
+      title: "Thao tác",
       key: "action",
       render: (_, record) => (
         <Space>
           <Button size="small" onClick={() => openBatteryHistory(record)}>
-            History
+            Lịch sử
           </Button>
           <Button size="small" onClick={() => openBatteryHealth(record)}>
-            Health
+            Sức khỏe
           </Button>
         </Space>
       ),
@@ -346,37 +347,52 @@ const ManageStation = () => {
   ];
 
   const columns = [
-    { title: "Name", dataIndex: "name", key: "name" },
-    { title: "Address", dataIndex: "address", key: "address" },
     {
-      title: "Status",
+      title: "Tên trạm",
+      dataIndex: "name",
+      key: "name",
+      render: (v) => <span style={{ fontWeight: 600 }}>{v}</span>,
+    },
+    { title: "Địa chỉ", dataIndex: "address", key: "address" },
+    {
+      title: "Trạng thái",
       dataIndex: "status",
       key: "status",
       render: (status) => {
         const isActive = status === "ACTIVE";
         return (
           <Tag color={isActive ? "green" : "red"}>
-            {isActive ? "Active" : "Inactive"}
+            {isActive ? "Đang hoạt động" : "Ngừng hoạt động"}
           </Tag>
         );
       },
     },
-    { title: "Battery capacity", dataIndex: "capacity", key: "capacity" },
     {
-      title: "Available batteries (FULL)",
-      dataIndex: "availableBatteries",
-      key: "availableBatteries",
+      title: "Sức chứa pin tối đa",
+      dataIndex: "capacity",
+      key: "capacity",
+      width: 140,
     },
     {
-      title: "Action",
+      title: "Số pin khả dụng (FULL)",
+      dataIndex: "availableBatteries",
+      key: "availableBatteries",
+      width: 170,
+      render: (v) => (
+        <span style={{ fontWeight: 600, color: "#16a34a" }}>{v ?? 0}</span>
+      ),
+    },
+    {
+      title: "Thao tác",
       key: "action",
+      width: 260,
       render: (_, record) => {
         const key = record.stationId ?? record.id;
         const isOpen = expandedRowKeys.includes(key);
         return (
           <Space>
             <Button onClick={() => toggleExpand(record)}>
-              {isOpen ? "Hide batteries" : "Batteries"}
+              {isOpen ? "Ẩn danh sách pin" : "Xem pin"}
             </Button>
             <Button
               type="primary"
@@ -394,15 +410,17 @@ const ManageStation = () => {
                 });
               }}
             >
-              Edit
+              Sửa
             </Button>
             <Popconfirm
-              title="Delete station"
-              okText="Delete"
+              title="Xóa trạm?"
+              description="Bạn có chắc chắn muốn xóa trạm này?"
+              okText="Xóa"
+              cancelText="Hủy"
               okButtonProps={{ danger: true }}
               onConfirm={() => handleDelete(record.stationId)}
             >
-              <Button danger>Delete</Button>
+              <Button danger>Xóa</Button>
             </Popconfirm>
           </Space>
         );
@@ -410,12 +428,41 @@ const ManageStation = () => {
     },
   ];
 
+  // ======= UI =======
   return (
     <>
-      <div className="mb-6 flex items-center gap-8">
-        <h2 className="text-3xl font-bold text-gray-800 pb-2">
-          Manage Station
-        </h2>
+      {/* Header đẹp hơn */}
+      <div
+        style={{
+          marginBottom: 24,
+          padding: 16,
+          borderRadius: 12,
+          background:
+            "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(16,185,129,0.08))",
+          border: "1px solid rgba(148,163,184,0.25)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: "#0f172a",
+              marginBottom: 4,
+            }}
+          >
+            Quản lý trạm sạc & kho pin
+          </div>
+          <div style={{ color: "#64748b", fontSize: 13 }}>
+            Xem danh sách trạm, số lượng pin khả dụng và tra cứu lịch sử / sức
+            khỏe từng pin.
+          </div>
+        </div>
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -423,8 +470,12 @@ const ManageStation = () => {
             form.resetFields();
             setOpen(true);
           }}
+          style={{
+            fontWeight: 600,
+            boxShadow: "0 6px 16px rgba(37,99,235,0.25)",
+          }}
         >
-          Add station
+          Thêm trạm mới
         </Button>
       </div>
 
@@ -433,8 +484,14 @@ const ManageStation = () => {
         dataSource={stations}
         rowKey={(r) => r.stationId ?? r.id ?? r.key}
         loading={loading}
-        pagination={pagination}
+        pagination={{
+          ...pagination,
+          showSizeChanger: true,
+          showTotal: (total) => `Tổng cộng ${total} trạm`,
+        }}
         onChange={handleTableChange}
+        bordered
+        size="middle"
         expandable={{
           expandedRowKeys,
           onExpand: async (expanded, record) => {
@@ -454,22 +511,33 @@ const ManageStation = () => {
               (Array.isArray(record.batteries) ? record.batteries : []);
 
             if (loadingRow)
-              return <div style={{ padding: 12 }}>Đang tải batteries…</div>;
+              return (
+                <div style={{ padding: 12, textAlign: "center" }}>
+                  <Spin /> Đang tải danh sách pin…
+                </div>
+              );
             if (!list || list.length === 0) {
               return (
                 <div style={{ padding: 12 }}>
-                  <Empty description="Không có battery nào cho station này" />
+                  <Empty description="Không có pin nào cho trạm này" />
                 </div>
               );
             }
             return (
-              <div style={{ background: "#fafafa", padding: 12 }}>
+              <div
+                style={{
+                  background: "#f9fafb",
+                  padding: 12,
+                  borderRadius: 8,
+                }}
+              >
                 <Table
                   columns={batteryCols}
                   dataSource={list}
                   rowKey={(r) => r.batteryId ?? r.id}
                   pagination={{ pageSize: 8 }}
                   size="small"
+                  bordered
                 />
               </div>
             );
@@ -479,10 +547,12 @@ const ManageStation = () => {
 
       {/* Modal tạo/sửa station */}
       <Modal
-        title="Station Information"
+        title="Thông tin trạm"
         open={open}
         onCancel={() => setOpen(false)}
         onOk={() => form.submit()}
+        okText="Lưu"
+        cancelText="Hủy"
         destroyOnClose
       >
         <Form
@@ -496,98 +566,94 @@ const ManageStation = () => {
           </Form.Item>
 
           <Form.Item
-            label="Name"
+            label="Tên trạm"
             name="name"
             rules={[
-              { required: true, message: "Please input station name!" },
-              { min: 3, message: "Name must be at least 3 characters long!" },
+              { required: true, message: "Vui lòng nhập tên trạm" },
+              { min: 3, message: "Tên trạm phải tối thiểu 3 ký tự" },
             ]}
           >
             <Input />
           </Form.Item>
 
           <Form.Item
-            label="Address"
+            label="Địa chỉ"
             name="address"
             rules={[
-              { required: true, message: "Please provide address!" },
-              { max: 200, message: "Address cannot exceed 200 characters!" },
+              { required: true, message: "Vui lòng nhập địa chỉ" },
+              { max: 200, message: "Địa chỉ không vượt quá 200 ký tự" },
             ]}
           >
-            <Input.TextArea />
+            <Input.TextArea rows={3} />
           </Form.Item>
 
           <Form.Item
-            label="Status"
+            label="Trạng thái"
             name="status"
-            rules={[{ required: true, message: "Please select status!" }]}
+            rules={[{ required: true, message: "Vui lòng chọn trạng thái" }]}
           >
-            <Select placeholder="Select status">
-              <Select.Option value="ACTIVE">Active</Select.Option>
-              <Select.Option value="INACTIVE">Inactive</Select.Option>
+            <Select placeholder="Chọn trạng thái">
+              <Select.Option value="ACTIVE">Đang hoạt động</Select.Option>
+              <Select.Option value="INACTIVE">Ngừng hoạt động</Select.Option>
             </Select>
           </Form.Item>
 
           <Form.Item
-            label="Battery capacity"
+            label="Sức chứa pin tối đa"
             name="capacity"
-            rules={[
-              { required: true, message: "Please input battery capacity!" },
-            ]}
+            rules={[{ required: true, message: "Vui lòng nhập sức chứa pin" }]}
           >
             <Input type="number" min={0} />
           </Form.Item>
 
           <Form.Item
-            label="Latitude"
+            label="Vĩ độ (Latitude)"
             name="latitude"
             rules={[
-              { required: true, message: "Please input latitude!" },
+              { required: true, message: "Vui lòng nhập vĩ độ" },
               {
                 validator: (_, value) => {
                   const n = parseFloat(value);
                   if (Number.isNaN(n))
-                    return Promise.reject("Latitude must be a number");
+                    return Promise.reject("Vĩ độ phải là số");
                   if (n < -90 || n > 90)
-                    return Promise.reject(
-                      "Latitude must be between -90 and 90"
-                    );
+                    return Promise.reject("Vĩ độ nằm trong khoảng -90 đến 90");
                   return Promise.resolve();
                 },
               },
             ]}
           >
-            <Input placeholder="e.g. 10.7626" />
+            <Input placeholder="Ví dụ: 10.7626" />
           </Form.Item>
 
           <Form.Item
-            label="Longitude"
+            label="Kinh độ (Longitude)"
             name="longitude"
             rules={[
-              { required: true, message: "Please input longitude!" },
+              { required: true, message: "Vui lòng nhập kinh độ" },
               {
                 validator: (_, value) => {
                   const n = parseFloat(value);
                   if (Number.isNaN(n))
-                    return Promise.reject("Longitude must be a number");
+                    return Promise.reject("Kinh độ phải là số");
                   if (n < -180 || n > 180)
                     return Promise.reject(
-                      "Longitude must be between -180 and 180"
+                      "Kinh độ nằm trong khoảng -180 đến 180"
                     );
                   return Promise.resolve();
                 },
               },
             ]}
           >
-            <Input placeholder="e.g. 106.6602" />
+            <Input placeholder="Ví dụ: 106.6602" />
           </Form.Item>
 
           <Form.Item
-            label="Image (optional)"
+            label="Ảnh trạm (tuỳ chọn)"
             name="image"
             valuePropName="fileList"
             getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
-            tooltip="Sẽ gửi theo field multipart/form-data tên 'image'"
+            tooltip="Gửi dưới dạng multipart/form-data, field 'image'"
           >
             <Upload listType="picture" beforeUpload={() => false} maxCount={1}>
               <Button icon={<UploadOutlined />}>Chọn ảnh</Button>
@@ -600,59 +666,99 @@ const ManageStation = () => {
       <Modal
         open={historyOpen}
         title={
-          <>
-            Battery History{" "}
-            {activeBattery?.serialNumber
-              ? `- ${activeBattery.serialNumber}`
-              : activeBattery?.batteryId
-              ? `#${activeBattery.batteryId}`
-              : ""}
-          </>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>
+            Lịch sử sử dụng pin{" "}
+            <span style={{ color: "#1677ff" }}>
+              {activeBattery?.serialNumber
+                ? `- ${activeBattery.serialNumber}`
+                : activeBattery?.batteryId
+                ? `#${activeBattery.batteryId}`
+                : ""}
+            </span>
+          </div>
         }
         footer={null}
         onCancel={() => setHistoryOpen(false)}
-        width={800}
+        width={860}
+        bodyStyle={{ padding: "18px 22px" }}
       >
         {historyLoading ? (
           <div style={{ textAlign: "center", padding: 24 }}>
             <Spin />
           </div>
         ) : historyRows.length ? (
-          <Table
-            size="small"
-            rowKey={(r, i) => r.key ?? i}
-            columns={[
-              {
-                title: "Thời điểm",
-                dataIndex: "time",
-                key: "time",
-                render: (t) => (t ? new Date(t).toLocaleString("vi-VN") : "-"),
-                width: 180,
-              },
-              {
-                title: "Sự kiện",
-                dataIndex: "event",
-                key: "event",
-                width: 160,
-              },
-              {
-                title: "Ghi chú",
-                dataIndex: "note",
-                key: "note",
-                ellipsis: true,
-              },
-              {
-                title: "Trạm",
-                dataIndex: "stationId",
-                key: "stationId",
-                width: 100,
-              },
-            ]}
-            dataSource={historyRows}
-            pagination={{ pageSize: 8 }}
-          />
+          <>
+            {(() => {
+              // đếm số lần pin chuyển sang trạng thái IN_USE
+              const inUseCount = historyRows.filter((r) => {
+                const s = `${r.event || ""} ${r.note || ""} ${
+                  r.raw?.notes || r.raw?.status || ""
+                }`.toUpperCase();
+                return s.includes("IN_USE");
+              }).length;
+
+              return (
+                <div
+                  style={{
+                    marginBottom: 12,
+                    padding: 12,
+                    borderRadius: 8,
+                    background: "#fffbeb",
+                    border: "1px solid #fed7aa",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ fontWeight: 600, color: "#92400e" }}>
+                    Tổng số lần đã sử dụng: {inUseCount}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <Table
+              size="small"
+              rowKey={(r, i) => r.key ?? i}
+              columns={[
+                {
+                  title: "Thời điểm",
+                  dataIndex: "time",
+                  key: "time",
+                  render: (t) =>
+                    t ? new Date(t).toLocaleString("vi-VN") : "-",
+                  width: 180,
+                },
+                {
+                  title: "Hành động",
+                  dataIndex: "event",
+                  key: "event",
+                  width: 140,
+                },
+                {
+                  title: "Trạm",
+                  dataIndex: "stationName",
+                  key: "stationName",
+                  width: 230,
+                  render: (v, r) =>
+                    v || (r.stationId ? `Trạm #${r.stationId}` : "-"),
+                },
+                {
+                  title: "Ghi chú",
+                  dataIndex: "note",
+                  key: "note",
+                  ellipsis: true,
+                },
+              ]}
+              dataSource={historyRows}
+              pagination={{ pageSize: 8 }}
+              bordered
+            />
+          </>
         ) : (
-          <Empty description="Chưa có lịch sử" />
+          <Empty description="Chưa có lịch sử sử dụng" />
         )}
       </Modal>
 
@@ -660,18 +766,21 @@ const ManageStation = () => {
       <Modal
         open={healthOpen}
         title={
-          <>
-            Battery Health{" "}
-            {activeBattery?.serialNumber
-              ? `- ${activeBattery.serialNumber}`
-              : activeBattery?.batteryId
-              ? `#${activeBattery.batteryId}`
-              : ""}
-          </>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>
+            Tình trạng sức khỏe pin{" "}
+            <span style={{ color: "#16a34a" }}>
+              {activeBattery?.serialNumber
+                ? `- ${activeBattery.serialNumber}`
+                : activeBattery?.batteryId
+                ? `#${activeBattery.batteryId}`
+                : ""}
+            </span>
+          </div>
         }
         footer={null}
         onCancel={() => setHealthOpen(false)}
         width={720}
+        bodyStyle={{ padding: "18px 22px" }}
       >
         {healthLoading ? (
           <div style={{ textAlign: "center", padding: 24 }}>
@@ -679,52 +788,146 @@ const ManageStation = () => {
           </div>
         ) : healthData ? (
           <>
-            <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Status">
-                {healthData.status ?? activeBattery?.status ?? "-"}
+            {/* Khối số liệu nổi bật */}
+            <div
+              style={{
+                display: "flex",
+                gap: 16,
+                marginBottom: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 180,
+                  padding: 16,
+                  borderRadius: 10,
+                  background: "#ecfdf3",
+                  border: "1px solid #bbf7d0",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#166534",
+                    marginBottom: 6,
+                    fontWeight: 500,
+                  }}
+                >
+                  Độ khỏe pin (SOH)
+                </div>
+                <div
+                  style={{
+                    fontSize: 26,
+                    fontWeight: 800,
+                    color: "#16a34a",
+                  }}
+                >
+                  {healthData.stateOfHealthPercent ?? "-"}%
+                </div>
+              </div>
+
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 180,
+                  padding: 16,
+                  borderRadius: 10,
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#1d4ed8",
+                    marginBottom: 6,
+                    fontWeight: 500,
+                  }}
+                >
+                  Tổng số lượt đổi pin
+                </div>
+                <div
+                  style={{
+                    fontSize: 26,
+                    fontWeight: 800,
+                    color: "#2563eb",
+                  }}
+                >
+                  {healthData.totalSwapCount ?? "-"}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 180,
+                  padding: 16,
+                  borderRadius: 10,
+                  background: "#fef3c7",
+                  border: "1px solid #fde68a",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#92400e",
+                    marginBottom: 6,
+                    fontWeight: 500,
+                  }}
+                >
+                  Tình trạng hiện tại
+                </div>
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: "#b45309",
+                  }}
+                >
+                  {healthData.currentCondition ?? "-"}
+                </div>
+              </div>
+            </div>
+
+            {/* Bảng mô tả chi tiết */}
+            <Descriptions
+              bordered
+              size="small"
+              column={2}
+              labelStyle={{ width: 180 }}
+            >
+              <Descriptions.Item label="Tình trạng hiện tại">
+                {healthData.currentCondition ??
+                  healthData.status ??
+                  activeBattery?.status ??
+                  "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="Capacity (Wh)">
+              <Descriptions.Item label="Tổng số lượt đổi pin">
+                {healthData.totalSwapCount ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Độ khỏe pin (SOH %)">
+                {healthData.stateOfHealthPercent ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Dung lượng (Wh)">
                 {healthData.capacityWh ?? activeBattery?.capacityWh ?? "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="SOH (%)">
-                {healthData.soh ?? healthData.stateOfHealth ?? "-"}
+              <Descriptions.Item label="Mức thoái hóa ước tính">
+                {healthData.degradationRate ?? "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="Cycles">
-                {healthData.cycles ?? healthData.cycleCount ?? "-"}
+              <Descriptions.Item label="SOC trung bình khi trả về">
+                {healthData.averageSoCOnReturn ?? "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="Voltage (V)">
-                {healthData.voltage ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Temperature (°C)">
-                {healthData.temperature ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Last updated">
+              <Descriptions.Item label="Cập nhật gần nhất">
                 {healthData.updatedAt
                   ? new Date(healthData.updatedAt).toLocaleString("vi-VN")
                   : "-"}
               </Descriptions.Item>
             </Descriptions>
-
-            {/* Hiển thị JSON thô (tham khảo) */}
-            <div style={{ marginTop: 12 }}>
-              <details>
-                <summary>Raw</summary>
-                <pre
-                  style={{
-                    background: "#f6f6f6",
-                    padding: 12,
-                    borderRadius: 8,
-                    maxHeight: 260,
-                    overflow: "auto",
-                  }}
-                >
-                  {JSON.stringify(healthData, null, 2)}
-                </pre>
-              </details>
-            </div>
           </>
         ) : (
-          <Empty description="Không có dữ liệu Health" />
+          <Empty description="Không có dữ liệu sức khỏe pin" />
         )}
       </Modal>
     </>

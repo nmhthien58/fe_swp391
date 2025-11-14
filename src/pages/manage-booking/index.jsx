@@ -24,6 +24,8 @@ import {
   DollarCircleOutlined,
   ToolOutlined,
   SearchOutlined,
+  SwapOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -90,11 +92,17 @@ export default function ManageSwap() {
   const [payForm] = Form.useForm();
   const method = Form.useWatch("method", payForm);
   const [payingSwap, setPayingSwap] = useState(null);
+  const [paySubmitting, setPaySubmitting] = useState(false); // loading nút OK pay
 
   // modal inspect
   const [inspectModalOpen, setInspectModalOpen] = useState(false);
   const [inspectForm] = Form.useForm();
   const [inspectingSwap, setInspectingSwap] = useState(null);
+  const [inspectSubmitting, setInspectSubmitting] = useState(false); // loading nút OK inspect
+
+  // modal xem giao dịch completed gần nhất
+  const [latestModalOpen, setLatestModalOpen] = useState(false);
+  const [latestSwap, setLatestSwap] = useState(null);
 
   // ===== fetch =====
   const fetchStations = async () => {
@@ -138,6 +146,40 @@ export default function ManageSwap() {
     fetchAll();
     fetchStations();
   }, []);
+
+  // ====== helper: swap completed gần nhất theo driver ======
+  const getLatestCompletedSwapOfDriver = (driverId) => {
+    if (driverId == null) return null;
+
+    const target = String(driverId);
+    const list = swaps.filter(
+      (s) => s.status === "COMPLETED" && String(s.driverId) === target // so sánh theo string cho chắc
+    );
+
+    if (!list.length) return null;
+
+    return list.reduce((latest, cur) => {
+      const t1 = new Date(
+        latest.completedAt || latest.updatedAt || latest.createdAt || 0
+      ).getTime();
+      const t2 = new Date(
+        cur.completedAt || cur.updatedAt || cur.createdAt || 0
+      ).getTime();
+      return t2 > t1 ? cur : latest;
+    });
+  };
+
+  const openLatestSwapModal = (driverId) => {
+    const latest = getLatestCompletedSwapOfDriver(driverId);
+
+    // luôn mở modal để user thấy có phản hồi
+    setLatestSwap(latest);
+    setLatestModalOpen(true);
+
+    if (!latest) {
+      message.info("Tài xế này chưa có giao dịch COMPLETED nào.");
+    }
+  };
 
   // ====== 1. Booking chờ xử lý ======
   const pendingBookings = useMemo(() => {
@@ -198,7 +240,7 @@ export default function ManageSwap() {
       title: "Trạm",
       dataIndex: "stationId",
       key: "stationId",
-      width: 200,
+      width: 220,
       render: (id) => {
         const name = stationsMap.get(id);
         return (
@@ -213,7 +255,7 @@ export default function ManageSwap() {
       title: "Giờ hẹn",
       dataIndex: "bookingTime",
       key: "bookingTime",
-      width: 160,
+      width: 170,
       render: (iso) => fmtVN(iso),
     },
     {
@@ -226,14 +268,14 @@ export default function ManageSwap() {
     {
       title: "Thao tác",
       key: "actions",
-      width: 240,
+      width: 260,
       render: (_, record) => (
         <Space>
           <Popconfirm
             title={`Xác nhận swap cho booking #${record.bookingId}?`}
             onConfirm={() => handleConfirmSwap(record)}
           >
-            <Button type="primary" icon={<CheckCircleOutlined />}>
+            <Button type="primary" icon={<CheckCircleOutlined />} size="small">
               Confirm swap
             </Button>
           </Popconfirm>
@@ -241,7 +283,7 @@ export default function ManageSwap() {
             title={`Hủy booking #${record.bookingId}?`}
             onConfirm={() => handleCancelBooking(record)}
           >
-            <Button danger icon={<CloseCircleOutlined />}>
+            <Button danger icon={<CloseCircleOutlined />} size="small">
               Hủy
             </Button>
           </Popconfirm>
@@ -251,11 +293,33 @@ export default function ManageSwap() {
   ];
 
   // ====== 2. Swap đang thực hiện ======
-  // theo yêu cầu: swap đang thực hiện = status = CONFIRMED, PAID
+  // swap đang thực hiện = status = CONFIRMED, PAID
   const activeSwaps = useMemo(
     () => swaps.filter((s) => ["CONFIRMED", "PAID"].includes(s.status)),
     [swaps]
   );
+
+  // ====== 3. Lịch sử ======
+  const completedSwaps = swaps
+    .filter((s) => s.status === "COMPLETED")
+    .sort(
+      (a, b) =>
+        new Date(b.completedAt ?? b.updatedAt ?? 0).getTime() -
+        new Date(a.completedAt ?? a.updatedAt ?? 0).getTime()
+    );
+
+  const cancelledBookings = bookings
+    .filter((b) => b.status === "CANCELLED")
+    .sort(
+      (a, b) =>
+        new Date(b.bookingTime ?? 0).getTime() -
+        new Date(a.bookingTime ?? 0).getTime()
+    );
+
+  // ====== summary numbers cho thanh thống kê ======
+  const pendingCount = pendingBookings.length;
+  const activeCount = activeSwaps.length;
+  const completedCount = completedSwaps.length;
 
   const openPayModal = (swap) => {
     setPayingSwap(swap);
@@ -268,6 +332,8 @@ export default function ManageSwap() {
 
   const submitPay = async () => {
     try {
+      setPaySubmitting(true);
+
       const values = await payForm.validateFields();
 
       // Nếu chọn SUBSCRIPTION → override amountVnd & voucherId = 0
@@ -283,10 +349,17 @@ export default function ManageSwap() {
       toast.success("Thanh toán thành công");
       setPayModalOpen(false);
       setPayingSwap(null);
+      payForm.resetFields();
       fetchAll();
     } catch (e) {
       console.error(e);
+      if (e?.errorFields) {
+        // lỗi validate form
+        return;
+      }
       toast.error(e?.response?.data?.message || "Thanh toán thất bại.");
+    } finally {
+      setPaySubmitting(false);
     }
   };
 
@@ -304,6 +377,8 @@ export default function ManageSwap() {
 
   const submitInspect = async () => {
     try {
+      setInspectSubmitting(true);
+
       const values = await inspectForm.validateFields();
 
       const { batterySource, batteryId: formBatteryId, ...rest } = values;
@@ -361,6 +436,8 @@ export default function ManageSwap() {
       message.error(
         e?.response?.data?.message || "Ghi nhận pin trả về thất bại."
       );
+    } finally {
+      setInspectSubmitting(false);
     }
   };
 
@@ -388,7 +465,7 @@ export default function ManageSwap() {
       title: "ID Pin đã đặt",
       dataIndex: "reservedBatteryId",
       key: "reservedBatteryId",
-      width: 110,
+      width: 120,
       render: (v) => (v != null ? v : "-"),
     },
 
@@ -396,7 +473,7 @@ export default function ManageSwap() {
       title: "Trạm",
       dataIndex: "stationId",
       key: "stationId",
-      width: 200,
+      width: 220,
       render: (id) => {
         const name = stationsMap.get(id);
         return (
@@ -418,23 +495,24 @@ export default function ManageSwap() {
       title: "Tạo lúc",
       dataIndex: "createdAt",
       key: "createdAt",
-      width: 160,
+      width: 170,
       render: (iso) => fmtVN(iso),
     },
     {
       title: "Thao tác",
       key: "actions",
-      width: 240,
+      width: 380,
       render: (_, record) => {
         const canPay = record.status === "CONFIRMED";
         const canInspect = record.status === "PAID";
         return (
-          <Space>
+          <Space wrap>
             <Button
               icon={<DollarCircleOutlined />}
               type="primary"
               onClick={() => openPayModal(record)}
               disabled={!canPay}
+              size="small"
             >
               Pay
             </Button>
@@ -442,31 +520,23 @@ export default function ManageSwap() {
               icon={<ToolOutlined />}
               onClick={() => openInspectModal(record)}
               disabled={!canInspect}
+              size="small"
             >
               Inspect return
+            </Button>
+            <Button
+              icon={<HistoryOutlined />}
+              onClick={() => openLatestSwapModal(record.driverId)}
+              size="small"
+              type="default"
+            >
+              Giao dịch gần nhất
             </Button>
           </Space>
         );
       },
     },
   ];
-
-  // ====== 3. Lịch sử ======
-  const completedSwaps = swaps
-    .filter((s) => s.status === "COMPLETED")
-    .sort(
-      (a, b) =>
-        new Date(b.completedAt ?? b.updatedAt ?? 0).getTime() -
-        new Date(a.completedAt ?? a.updatedAt ?? 0).getTime()
-    );
-
-  const cancelledBookings = bookings
-    .filter((b) => b.status === "CANCELLED")
-    .sort(
-      (a, b) =>
-        new Date(b.bookingTime ?? 0).getTime() -
-        new Date(a.bookingTime ?? 0).getTime()
-    );
 
   const historySwapColumns = [
     {
@@ -486,35 +556,35 @@ export default function ManageSwap() {
       title: "Trạm",
       dataIndex: "stationId",
       key: "stationId",
-      width: 160,
+      width: 200,
       render: (id) => stationsMap.get(id) || `Trạm #${id}`,
     },
     {
       title: "Pin đã đổi",
       dataIndex: "reservedBatteryId",
       key: "reservedBatteryId",
-      width: 110,
+      width: 120,
       render: (v) => (v != null ? v : "-"),
     },
     {
       title: "Pin trả về",
       dataIndex: "returnedBatteryId",
       key: "returnedBatteryId",
-      width: 110,
+      width: 120,
       render: (v) => (v != null ? v : "-"),
     },
     {
       title: "Số tiền",
       dataIndex: "amountVnd",
       key: "amountVnd",
-      width: 120,
+      width: 140,
       render: (v) => formatVnd(v),
     },
     {
       title: "Hoàn thành lúc",
       dataIndex: "completedAt",
       key: "completedAt",
-      width: 180,
+      width: 190,
       render: (iso, record) =>
         fmtVN(iso || record.updatedAt || record.inspectedAt),
     },
@@ -556,8 +626,23 @@ export default function ManageSwap() {
   return (
     <Card
       bordered={false}
-      style={{ borderRadius: 10 }}
-      title={<Title level={4}>Quản lý đổi pin</Title>}
+      style={{
+        borderRadius: 16,
+        boxShadow: "0 10px 30px rgba(15,23,42,0.12)",
+        background:
+          "linear-gradient(135deg, #f9fafb 0%, #eff6ff 40%, #ffffff 100%)",
+      }}
+      bodyStyle={{ padding: 20 }}
+      title={
+        <div>
+          <Title level={4} style={{ margin: 0 }}>
+            Quản lý đổi pin
+          </Title>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Xác nhận booking, xử lý swap và theo dõi lịch sử giao dịch.
+          </Text>
+        </div>
+      }
       extra={
         <Space>
           <Input
@@ -566,19 +651,96 @@ export default function ManageSwap() {
             prefix={<SearchOutlined />}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            style={{ width: 280 }}
+            style={{ width: 280, borderRadius: 999 }}
+            size="middle"
           />
           <Button
             icon={<ReloadOutlined />}
             onClick={fetchAll}
             loading={loading}
+            type="default"
           >
             Làm mới
           </Button>
         </Space>
       }
     >
-      <Tabs defaultActiveKey="pending">
+      {/* Thanh thống kê tổng quan */}
+      <div
+        style={{
+          marginBottom: 16,
+          padding: "10px 16px",
+          borderRadius: 12,
+          background: "rgba(255,255,255,0.9)",
+          border: "1px solid #e5e7eb",
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            padding: "6px 10px",
+            borderRadius: 10,
+            background: "#eff6ff",
+          }}
+        >
+          <Space direction="vertical" size={0}>
+            <Space>
+              <SwapOutlined />
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Booking chờ xử lý
+              </Text>
+            </Space>
+            <Text style={{ fontSize: 18, fontWeight: 700 }}>
+              {pendingCount}
+            </Text>
+          </Space>
+        </div>
+        <div
+          style={{
+            padding: "6px 10px",
+            borderRadius: 10,
+            background: "#ecfdf3",
+          }}
+        >
+          <Space direction="vertical" size={0}>
+            <Space>
+              <DollarCircleOutlined />
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Swap đang thực hiện
+              </Text>
+            </Space>
+            <Text style={{ fontSize: 18, fontWeight: 700 }}>{activeCount}</Text>
+          </Space>
+        </div>
+        <div
+          style={{
+            padding: "6px 10px",
+            borderRadius: 10,
+            background: "#fef3c7",
+          }}
+        >
+          <Space direction="vertical" size={0}>
+            <Space>
+              <HistoryOutlined />
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Swap đã hoàn tất
+              </Text>
+            </Space>
+            <Text style={{ fontSize: 18, fontWeight: 700 }}>
+              {completedCount}
+            </Text>
+          </Space>
+        </div>
+      </div>
+
+      <Tabs
+        defaultActiveKey="pending"
+        type="card"
+        tabBarGutter={24}
+        tabBarStyle={{ marginBottom: 12 }}
+      >
         {/* TAB 1 */}
         <TabPane tab="1. Booking chờ xử lý" key="pending">
           <Table
@@ -586,7 +748,9 @@ export default function ManageSwap() {
             columns={bookingColumns}
             dataSource={pendingBookings}
             loading={loading}
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 10, size: "small" }}
+            size="middle"
+            bordered={false}
           />
         </TabPane>
 
@@ -597,19 +761,25 @@ export default function ManageSwap() {
             columns={activeSwapColumns}
             dataSource={activeSwaps}
             loading={loading}
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 10, size: "small" }}
+            size="middle"
+            bordered={false}
           />
         </TabPane>
 
         {/* TAB 3 */}
         <TabPane tab="3. Lịch sử" key="history">
-          <Title level={5}>Swap đã hoàn tất</Title>
+          <Title level={5} style={{ marginTop: 4 }}>
+            Swap đã hoàn tất
+          </Title>
           <Table
             rowKey="swapId"
             columns={historySwapColumns}
             dataSource={completedSwaps}
             loading={loading}
-            pagination={{ pageSize: 5 }}
+            pagination={{ pageSize: 5, size: "small" }}
+            size="middle"
+            bordered={false}
             style={{ marginBottom: 24 }}
           />
 
@@ -619,18 +789,21 @@ export default function ManageSwap() {
             columns={historyBookingColumns}
             dataSource={cancelledBookings}
             loading={loading}
-            pagination={{ pageSize: 5 }}
+            pagination={{ pageSize: 5, size: "small" }}
+            size="middle"
+            bordered={false}
           />
         </TabPane>
       </Tabs>
-      {/* PAY MODAL */}
 
+      {/* PAY MODAL */}
       <Modal
         open={payModalOpen}
         title={`Thanh toán swap #${payingSwap?.swapId || ""}`}
         onCancel={() => setPayModalOpen(false)}
         onOk={submitPay}
         okText="Thanh toán"
+        confirmLoading={paySubmitting}
         destroyOnClose
       >
         <Form form={payForm} layout="vertical">
@@ -665,6 +838,7 @@ export default function ManageSwap() {
           )}
         </Form>
       </Modal>
+
       {/* INSPECT MODAL */}
       <Modal
         open={inspectModalOpen}
@@ -676,6 +850,7 @@ export default function ManageSwap() {
         }}
         onOk={submitInspect}
         okText="Ghi nhận"
+        confirmLoading={inspectSubmitting}
         destroyOnClose
       >
         <Form form={inspectForm} layout="vertical">
@@ -741,6 +916,55 @@ export default function ManageSwap() {
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* LATEST SWAP MODAL */}
+      <Modal
+        open={latestModalOpen}
+        title="Giao dịch COMPLETED gần nhất của tài xế"
+        onCancel={() => {
+          setLatestModalOpen(false);
+          setLatestSwap(null);
+        }}
+        footer={[
+          <Button
+            key="close"
+            type="primary"
+            onClick={() => {
+              setLatestModalOpen(false);
+              setLatestSwap(null);
+            }}
+          >
+            Đóng
+          </Button>,
+        ]}
+      >
+        {latestSwap ? (
+          <Space direction="vertical" size="small" style={{ width: "100%" }}>
+            <Text>
+              <Text strong>Swap ID: </Text>#{latestSwap.swapId}
+            </Text>
+            <Text>
+              <Text strong>ID pin đã đổi: </Text>
+              {latestSwap.reservedBatteryId ?? "-"}
+            </Text>
+            <Text>
+              <Text strong>Thời gian hoàn thành: </Text>
+              {fmtVN(
+                latestSwap.completedAt ||
+                  latestSwap.updatedAt ||
+                  latestSwap.createdAt
+              )}
+            </Text>
+            <Text>
+              <Text strong>Trạm: </Text>
+              {stationsMap.get(latestSwap.stationId) ||
+                `Trạm #${latestSwap.stationId}`}
+            </Text>
+          </Space>
+        ) : (
+          <Text>Tài xế này chưa có giao dịch COMPLETED nào.</Text>
+        )}
       </Modal>
     </Card>
   );

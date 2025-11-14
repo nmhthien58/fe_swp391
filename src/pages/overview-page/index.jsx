@@ -36,7 +36,10 @@ import {
 } from "recharts";
 import dayjs from "dayjs";
 import api from "../../config/axios";
-
+import utc from "dayjs/plugin/utc";
+import tz from "dayjs/plugin/timezone";
+dayjs.extend(utc);
+dayjs.extend(tz);
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
@@ -61,6 +64,7 @@ const Overview = () => {
   const [stationsMap, setStationsMap] = useState(new Map());
 
   // ===== helpers =====
+
   // eslint-disable-next-line no-unused-vars
   const fmtVnd = (n) =>
     typeof n === "number"
@@ -113,7 +117,8 @@ const Overview = () => {
         fetchSwapsByStatus("COMPLETED"),
         fetchSwapsByStatus("PAID"),
       ]);
-      // merge tránh trùng
+
+      // merge tránh trùng swapId
       const merged = [...completed, ...paid];
       const swapMap = new Map();
       merged.forEach((s) => swapMap.set(s.swapId, s));
@@ -133,7 +138,9 @@ const Overview = () => {
     loadAll();
   }, []);
 
-  // ====== tính toán ======
+  // ====== TÍNH TOÁN ======
+
+  // 1. Doanh thu gói
   const totalRevenueFromPlans = useMemo(() => {
     return plans.reduce((sum, plan) => {
       const stats = planStatsMap[plan.planId];
@@ -159,14 +166,17 @@ const Overview = () => {
     });
   }, [plans, planStatsMap]);
 
-  const bestPlan = useMemo(() => {
-    return revenuePerPlan.reduce(
-      (best, cur) =>
-        cur.totalSubscriptions > (best?.totalSubscriptions ?? 0) ? cur : best,
-      null
-    );
-  }, [revenuePerPlan]);
+  const bestPlan = useMemo(
+    () =>
+      revenuePerPlan.reduce(
+        (best, cur) =>
+          cur.totalSubscriptions > (best?.totalSubscriptions ?? 0) ? cur : best,
+        null
+      ),
+    [revenuePerPlan]
+  );
 
+  // 2. Doanh thu swap
   const totalRevenueFromSwaps = useMemo(
     () => swaps.reduce((sum, s) => sum + (s.amountVnd ?? 0), 0),
     [swaps]
@@ -192,6 +202,7 @@ const Overview = () => {
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
   }, [swaps, stationsMap]);
 
+  // 3. Nguồn thu
   const revenueSourceData = useMemo(
     () => [
       { name: "Gói đăng ký", value: totalRevenueFromPlans },
@@ -200,15 +211,7 @@ const Overview = () => {
     [totalRevenueFromPlans, totalRevenueFromSwaps]
   );
 
-  const stationChartData = useMemo(
-    () =>
-      revenueByStation.slice(0, 7).map((s) => ({
-        station: s.name,
-        revenue: s.revenue,
-      })),
-    [revenueByStation]
-  );
-
+  // 4. Time-series theo ngày
   const timeSeriesData = useMemo(() => {
     const map = new Map();
     swaps.forEach((s) => {
@@ -228,6 +231,66 @@ const Overview = () => {
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
   }, [swaps]);
+
+  // 5. PHÂN BỐ THEO KHUNG GIỜ (12 khung, mỗi khung 2 tiếng)
+  // 5. PHÂN BỐ THEO KHUNG GIỜ (12 khung, mỗi khung 2 tiếng) – dùng giờ VN
+  const hourlySwapData = useMemo(() => {
+    const VN_TZ = "Asia/Ho_Chi_Minh";
+
+    // Tạo 12 khung giờ: 00:00–01:59, 02:00–03:59, ...
+    const slots = Array.from({ length: 12 }, (_, i) => {
+      const start = i * 2;
+      const end = start + 1; // vì hiển thị tới :59
+      const label = `${start.toString().padStart(2, "0")}:00 - ${end
+        .toString()
+        .padStart(2, "0")}:59`;
+
+      return {
+        slotIndex: i,
+        label,
+        swaps: 0,
+      };
+    });
+
+    swaps.forEach((swap) => {
+      const ts =
+        swap.createdAt || swap.completedAt || swap.paidAt || swap.confirmedAt;
+      if (!ts) return;
+
+      // 👉 Giả định BE đang lưu UTC → convert sang giờ Việt Nam
+      // Nếu BE đã lưu sẵn giờ VN thì đổi dòng dưới thành: dayjs(ts).tz(VN_TZ)
+      const d = dayjs.utc(ts).tz(VN_TZ);
+      if (!d.isValid()) return;
+
+      const hour = d.hour(); // giờ VN 0..23
+      const idx = Math.floor(hour / 2); // 0..11
+
+      if (idx >= 0 && idx < slots.length) {
+        slots[idx].swaps += 1;
+      }
+    });
+
+    return slots;
+  }, [swaps]);
+
+  const peakHourSlot = useMemo(
+    () =>
+      hourlySwapData.reduce(
+        (best, cur) => (cur.swaps > (best?.swaps ?? 0) ? cur : best),
+        null
+      ),
+    [hourlySwapData]
+  );
+
+  // 6. Dữ liệu bảng trạm
+  const stationChartData = useMemo(
+    () =>
+      revenueByStation.slice(0, 7).map((s) => ({
+        station: s.name,
+        revenue: s.revenue,
+      })),
+    [revenueByStation]
+  );
 
   // ====== columns ======
   const planColumns = [
@@ -449,8 +512,16 @@ const Overview = () => {
                   <div style={{ fontSize: 13, color: "#999" }}>
                     Gói bán chạy nhất
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: 16 }}>
+                  <div
+                    style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}
+                  >
                     {bestPlan ? bestPlan.name : "—"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>
+                    Khung giờ cao điểm:{" "}
+                    {peakHourSlot && peakHourSlot.swaps > 0
+                      ? `${peakHourSlot.label} (${peakHourSlot.swaps} lượt)`
+                      : "chưa có dữ liệu"}
                   </div>
                 </div>
               </Card>
@@ -562,6 +633,27 @@ const Overview = () => {
                   size="small"
                   pagination={false}
                 />
+              </Card>
+            </Col>
+          </Row>
+
+          {/* CHART ROW 3 – KHUNG GIỜ CAO ĐIỂM */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col xs={24}>
+              <Card
+                title="Phân bố lượt đổi pin theo khung giờ (mỗi khung 2 tiếng)"
+                style={{ borderRadius: 14 }}
+              >
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={hourlySwapData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={(value) => `${value} lượt`} />
+                    <Legend />
+                    <Bar dataKey="swaps" name="Số lượt đổi" fill="#0ea5e9" />
+                  </BarChart>
+                </ResponsiveContainer>
               </Card>
             </Col>
           </Row>

@@ -18,12 +18,13 @@ import {
   createBatteryAtStation,
   updateBatteryStatus,
   BATTERY_STATUS,
-  getBatteriesByStationId, // thêm hàm mới
+  getBatteriesByStationId,
 } from "../../services/batteries";
 import api from "../../config/axios";
 
 const statusStyle = {
   FULL: { color: "green", text: "Đầy" },
+  AVAILABLE: { color: "cyan", text: "Sẵn sàng" }, // AVAILABLE
   EMPTY: { color: "red", text: "Hết" },
   CHARGING: { color: "blue", text: "Đang sạc" },
   RESERVED: { color: "black", text: "Đã giữ chỗ" },
@@ -32,6 +33,11 @@ const statusStyle = {
   MAINTENANCE: { color: "orange", text: "Bảo dưỡng" },
   DAMAGED: { color: "error", text: "Hỏng" },
 };
+
+// số lượng pin lấy từ API mỗi lần
+const API_PAGE_SIZE = 50;
+// số lượng pin hiển thị trên table mỗi trang
+const UI_PAGE_SIZE = 7;
 
 export default function ManageStockBattery() {
   const [formCreate] = useForm();
@@ -42,18 +48,17 @@ export default function ManageStockBattery() {
   const [loading, setLoading] = useState(false);
 
   const [data, setData] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [total, setTotal] = useState(0);
+
+  // phân trang trên UI (Table)
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [sorter, setSorter] = useState({
-    field: "serialNumber",
-    order: "ascend",
-  });
 
   const [currentBattery, setCurrentBattery] = useState(null);
 
   const [stats, setStats] = useState({
     FULL: 0,
+    AVAILABLE: 0,
     CHARGING: 0,
     MAINTENANCE: 0,
     IN_USE: 0,
@@ -61,14 +66,15 @@ export default function ManageStockBattery() {
   });
 
   // ====== station dropdown ======
-  const [stationQuery, setStationQuery] = useState(""); // stationId đang lọc
-  const [isStationMode, setIsStationMode] = useState(false); // đang lọc theo trạm
+  const [stationQuery, setStationQuery] = useState("");
+  const [isStationMode, setIsStationMode] = useState(false);
   const [stations, setStations] = useState([]);
   const [loadingStations, setLoadingStations] = useState(false);
 
   const applyStats = (items) => {
     const counts = {
       FULL: 0,
+      AVAILABLE: 0,
       CHARGING: 0,
       MAINTENANCE: 0,
       IN_USE: 0,
@@ -80,19 +86,20 @@ export default function ManageStockBattery() {
     setStats(counts);
   };
 
+  // ====== FETCH PIN (mặc định 50 / page từ API, chỉ gọi 1 lần) ======
   const fetchData = async () => {
     setLoading(true);
     try {
-      const sort =
-        sorter?.field && sorter?.order
-          ? `${sorter.field},${sorter.order === "ascend" ? "asc" : "desc"}`
-          : "serialNumber,asc";
+      const res = await getBatteries({
+        page: 0,
+        size: API_PAGE_SIZE,
+      });
 
-      const res = await getBatteries({ page: page - 1, size: pageSize, sort });
       const items = res?.content || [];
       setData(items);
       setTotal(res?.totalElements ?? items.length);
       applyStats(items);
+      setPage(1); // reset về trang 1
     } finally {
       setLoading(false);
     }
@@ -117,10 +124,7 @@ export default function ManageStockBattery() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [page, pageSize, sorter]);
-
-  useEffect(() => {
+    fetchData(); // 🔹 gọi 1 lần khi mount
     fetchStations();
   }, []);
 
@@ -130,7 +134,7 @@ export default function ManageStockBattery() {
       message.success("Tạo pin thành công!");
       setOpenCreate(false);
       formCreate.resetFields();
-      fetchData();
+      fetchData(); // reload
     } catch (e) {
       message.error(e?.response?.data?.message || "Tạo pin thất bại");
     }
@@ -143,13 +147,13 @@ export default function ManageStockBattery() {
       setOpenPatch(false);
       formPatch.resetFields();
       setCurrentBattery(null);
-      fetchData();
+      fetchData(); // reload
     } catch (e) {
       message.error(e?.response?.data?.message || "Cập nhật thất bại");
     }
   };
 
-  // ====================== Thêm chức năng lọc theo trạm ======================
+  // ====================== Lọc theo trạm ======================
   const handleSearchByStation = async () => {
     if (!stationQuery) {
       return message.warning("Vui lòng chọn trạm");
@@ -161,6 +165,7 @@ export default function ManageStockBattery() {
       setData(list);
       setTotal(list.length);
       applyStats(list);
+      setPage(1);
 
       const station = stations.find((s) => s.stationId === stationQuery);
       const stationName =
@@ -181,21 +186,14 @@ export default function ManageStockBattery() {
     setIsStationMode(false);
     fetchData();
   };
-  // ==========================================================================
+  // ==============================================================
 
   const columns = [
     {
       title: "Mã Pin (Serial)",
       dataIndex: "serialNumber",
       key: "serialNumber",
-      sorter: true,
-      render: (v) => v || "-",
-    },
-    {
-      title: "Model",
-      dataIndex: "model",
-      key: "model",
-      sorter: true,
+      sorter: true, // sort client-side, không gọi API
       render: (v) => v || "-",
     },
     {
@@ -246,97 +244,104 @@ export default function ManageStockBattery() {
     },
   ];
 
+  // ============ STYLE helper ============
+  const statCard = (bg, border) => ({
+    flex: 1,
+    padding: 18,
+    background: bg,
+    borderRadius: 12,
+    border: `1px solid ${border}`,
+    boxShadow: "0 4px 12px rgba(15,23,42,0.06)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    justifyContent: "space-between",
+    minWidth: 160,
+  });
+
   return (
     <>
-      <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-800 pb-2">
-          Quản Lý Tồn Kho Pin
-        </h2>
+      {/* Header */}
+      <div
+        style={{
+          marginBottom: 20,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div>
+          <h2
+            style={{
+              fontSize: 24,
+              fontWeight: 700,
+              margin: 0,
+              color: "#111827",
+            }}
+          >
+            Quản lý tồn kho pin
+          </h2>
+          <p
+            style={{
+              margin: 0,
+              marginTop: 4,
+              color: "#6b7280",
+              fontSize: 13,
+            }}
+          >
+            Theo dõi trạng thái pin tại các trạm và cập nhật nhanh.
+          </p>
+        </div>
       </div>
 
       {/* Thống kê nhanh */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
-        <div
-          style={{
-            flex: 1,
-            padding: 20,
-            background: "#ecfdf5",
-            borderRadius: 8,
-            border: "1px solid #a7f3d0",
-          }}
-        >
-          <div style={{ fontSize: 14, color: "#047857", marginBottom: 8 }}>
-            Pin Đầy
-          </div>
-          <div style={{ fontSize: 32, fontWeight: "bold", color: "#10b981" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          marginBottom: 20,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={statCard("#ecfdf5", "#a7f3d0")}>
+          <div style={{ fontSize: 13, color: "#047857" }}>Pin Đầy</div>
+          <div style={{ fontSize: 28, fontWeight: "bold", color: "#10b981" }}>
             {stats.FULL ?? 0}
           </div>
         </div>
 
-        <div
-          style={{
-            flex: 1,
-            padding: 20,
-            background: "#eff6ff",
-            borderRadius: 8,
-            border: "1px solid #bfdbfe",
-          }}
-        >
-          <div style={{ fontSize: 14, color: "#1e40af", marginBottom: 8 }}>
-            Pin Đang Sạc
+        <div style={statCard("#e0f2fe", "#bae6fd")}>
+          <div style={{ fontSize: 13, color: "#0369a1" }}>Pin Available</div>
+          <div style={{ fontSize: 28, fontWeight: "bold", color: "#0891b2" }}>
+            {stats.AVAILABLE ?? 0}
           </div>
-          <div style={{ fontSize: 32, fontWeight: "bold", color: "#2563eb" }}>
+        </div>
+
+        <div style={statCard("#eff6ff", "#bfdbfe")}>
+          <div style={{ fontSize: 13, color: "#1e40af" }}>Pin Đang Sạc</div>
+          <div style={{ fontSize: 28, fontWeight: "bold", color: "#2563eb" }}>
             {stats.CHARGING ?? 0}
           </div>
         </div>
 
-        <div
-          style={{
-            flex: 1,
-            padding: 20,
-            background: "#fff7ed",
-            borderRadius: 8,
-            border: "1px solid #fed7aa",
-          }}
-        >
-          <div style={{ fontSize: 14, color: "#c2410c", marginBottom: 8 }}>
-            Pin Bảo Dưỡng
-          </div>
-          <div style={{ fontSize: 32, fontWeight: "bold", color: "#ea580c" }}>
-            {stats.MAINTENANCE ?? 0}
-          </div>
-        </div>
-
-        <div
-          style={{
-            flex: 1,
-            padding: 20,
-            background: "#f5f3ff",
-            borderRadius: 8,
-            border: "1px solid #ddd6fe",
-          }}
-        >
-          <div style={{ fontSize: 14, color: "#5b21b6", marginBottom: 8 }}>
-            Pin Đang Sử Dụng
-          </div>
-          <div style={{ fontSize: 32, fontWeight: "bold", color: "#7c3aed" }}>
+        <div style={statCard("#f5f3ff", "#ddd6fe")}>
+          <div style={{ fontSize: 13, color: "#5b21b6" }}>Pin Đang Sử Dụng</div>
+          <div style={{ fontSize: 28, fontWeight: "bold", color: "#7c3aed" }}>
             {stats.IN_USE ?? 0}
           </div>
         </div>
 
-        <div
-          style={{
-            flex: 1,
-            padding: 20,
-            background: "#fef2f2",
-            borderRadius: 8,
-            border: "1px solid #fecaca",
-          }}
-        >
-          <div style={{ fontSize: 14, color: "#b91c1c", marginBottom: 8 }}>
-            Pin Hết
+        <div style={statCard("#fff7ed", "#fed7aa")}>
+          <div style={{ fontSize: 13, color: "#c2410c" }}>Pin Bảo Dưỡng</div>
+          <div style={{ fontSize: 28, fontWeight: "bold", color: "#ea580c" }}>
+            {stats.MAINTENANCE ?? 0}
           </div>
-          <div style={{ fontSize: 32, fontWeight: "bold", color: "#ef4444" }}>
+        </div>
+
+        <div style={statCard("#fef2f2", "#fecaca")}>
+          <div style={{ fontSize: 13, color: "#b91c1c" }}>Pin Hết</div>
+          <div style={{ fontSize: 28, fontWeight: "bold", color: "#ef4444" }}>
             {stats.EMPTY ?? 0}
           </div>
         </div>
@@ -351,6 +356,10 @@ export default function ManageStockBattery() {
           justifyContent: "space-between",
           marginBottom: 16,
           flexWrap: "wrap",
+          padding: "10px 12px",
+          borderRadius: 12,
+          background: "#f9fafb",
+          border: "1px solid #e5e7eb",
         }}
       >
         <Button type="primary" onClick={() => setOpenCreate(true)}>
@@ -379,22 +388,23 @@ export default function ManageStockBattery() {
         </div>
       </div>
 
+      {/* Bảng pin */}
       <Table
         rowKey={(r) => String(r.batteryId)}
         loading={loading}
         dataSource={data}
         columns={columns}
-        onChange={(pagination, _filters, sorterArg) => {
-          if (!Array.isArray(sorterArg)) {
-            setSorter({
-              field: sorterArg.field || "serialNumber",
-              order: sorterArg.order || "ascend",
-            });
-          }
+        // eslint-disable-next-line no-unused-vars
+        onChange={(pagination, _filters, _sorterArg) => {
+          // chỉ update page UI, không đụng tới sorter → không gọi API lại
           setPage(pagination.current);
-          setPageSize(pagination.pageSize);
         }}
-        pagination={{ current: page, pageSize, total, showSizeChanger: true }}
+        pagination={{
+          current: page,
+          pageSize: UI_PAGE_SIZE,
+          total: data.length,
+          showSizeChanger: false,
+        }}
       />
 
       {/* Modal CREATE */}
@@ -403,6 +413,7 @@ export default function ManageStockBattery() {
         open={openCreate}
         onCancel={() => setOpenCreate(false)}
         onOk={() => formCreate.submit()}
+        okText="Tạo"
       >
         <Form form={formCreate} layout="vertical" onFinish={handleCreate}>
           <Form.Item
@@ -452,6 +463,7 @@ export default function ManageStockBattery() {
           setCurrentBattery(null);
         }}
         onOk={() => formPatch.submit()}
+        okText="Lưu"
       >
         <Form form={formPatch} layout="vertical" onFinish={handlePatch}>
           <Form.Item
