@@ -26,7 +26,6 @@ import AppLayout from "./components/homepage/layout.jsx";
 import Home from "./pages/homepage/index.jsx";
 import { useSelector } from "react-redux";
 import { selectToken } from "./redux/accountSlice.js";
-import TestVerify from "./pages/test/test-verify.jsx";
 import PlanHistory from "./pages/subcription-history/index.jsx";
 import BookingHistory from "./pages/booking-history/index.jsx";
 import ManageSwap from "./pages/manage-booking/index.jsx";
@@ -80,10 +79,7 @@ function App() {
         { path: "swap", element: <ManageBatterySwapTransaction /> },
       ],
     },
-    {
-      path: "/test",
-      element: <TestVerify />,
-    },
+
     {
       path: "/",
       element: <AppLayout />,
