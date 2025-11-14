@@ -20,6 +20,7 @@ import {
   BATTERY_STATUS,
   getBatteriesByStationId, // thêm hàm mới
 } from "../../services/batteries";
+import api from "../../config/axios";
 
 const statusStyle = {
   FULL: { color: "green", text: "Đầy" },
@@ -59,8 +60,11 @@ export default function ManageStockBattery() {
     EMPTY: 0,
   });
 
-  const [stationQuery, setStationQuery] = useState(""); // ô nhập Station ID
+  // ====== station dropdown ======
+  const [stationQuery, setStationQuery] = useState(""); // stationId đang lọc
   const [isStationMode, setIsStationMode] = useState(false); // đang lọc theo trạm
+  const [stations, setStations] = useState([]);
+  const [loadingStations, setLoadingStations] = useState(false);
 
   const applyStats = (items) => {
     const counts = {
@@ -94,9 +98,31 @@ export default function ManageStockBattery() {
     }
   };
 
+  // lấy danh sách trạm cho dropdown
+  const fetchStations = async () => {
+    setLoadingStations(true);
+    try {
+      const res = await api.get("/api/stations/search", {
+        params: { keyword: " " },
+      });
+      const list = Array.isArray(res.data) ? res.data : [];
+      setStations(list);
+    } catch (e) {
+      console.error(e);
+      message.error("Không tải được danh sách trạm");
+      setStations([]);
+    } finally {
+      setLoadingStations(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [page, pageSize, sorter]);
+
+  useEffect(() => {
+    fetchStations();
+  }, []);
 
   const handleCreate = async (values) => {
     try {
@@ -126,7 +152,7 @@ export default function ManageStockBattery() {
   // ====================== Thêm chức năng lọc theo trạm ======================
   const handleSearchByStation = async () => {
     if (!stationQuery) {
-      return message.warning("Vui lòng nhập Station ID");
+      return message.warning("Vui lòng chọn trạm");
     }
     setLoading(true);
     try {
@@ -135,7 +161,12 @@ export default function ManageStockBattery() {
       setData(list);
       setTotal(list.length);
       applyStats(list);
-      message.success(`Đã tải ${list.length} pin của trạm ${stationQuery}`);
+
+      const station = stations.find((s) => s.stationId === stationQuery);
+      const stationName =
+        station?.name || `Trạm #${stationQuery ?? ""}` || "trạm đã chọn";
+
+      message.success(`Đã tải ${list.length} pin của ${stationName}`);
     } catch (e) {
       message.error(
         e?.response?.data?.message || "Không thể tải danh sách pin theo trạm"
@@ -327,12 +358,19 @@ export default function ManageStockBattery() {
         </Button>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Input
-            placeholder="Nhập Station ID…"
-            type="number"
-            value={stationQuery}
-            onChange={(e) => setStationQuery(e.target.value)}
-            style={{ width: 220 }}
+          <Select
+            showSearch
+            placeholder="Chọn trạm…"
+            style={{ width: 260 }}
+            loading={loadingStations}
+            allowClear
+            optionFilterProp="label"
+            value={stationQuery || undefined}
+            onChange={(value) => setStationQuery(value || "")}
+            options={stations.map((s) => ({
+              value: s.stationId,
+              label: `${s.name || `Trạm #${s.stationId}`} (ID: ${s.stationId})`,
+            }))}
           />
           <Button onClick={handleSearchByStation}>Tìm theo trạm</Button>
           {isStationMode && (
@@ -368,11 +406,22 @@ export default function ManageStockBattery() {
       >
         <Form form={formCreate} layout="vertical" onFinish={handleCreate}>
           <Form.Item
-            label="Station ID"
+            label="Trạm"
             name="stationId"
-            rules={[{ required: true, message: "Vui lòng nhập Station ID" }]}
+            rules={[{ required: true, message: "Vui lòng chọn trạm" }]}
           >
-            <Input type="number" placeholder="VD: 1" />
+            <Select
+              showSearch
+              placeholder="Chọn trạm"
+              loading={loadingStations}
+              optionFilterProp="label"
+              options={stations.map((s) => ({
+                value: s.stationId,
+                label: `${s.name || `Trạm #${s.stationId}`} (ID: ${
+                  s.stationId
+                })`,
+              }))}
+            />
           </Form.Item>
           <Form.Item
             label="Status"

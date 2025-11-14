@@ -15,6 +15,7 @@ import {
   Form,
   InputNumber,
   Select,
+  Radio,
 } from "antd";
 import {
   ReloadOutlined,
@@ -28,6 +29,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import api from "../../config/axios";
 import { toast } from "react-toastify";
+import { createBatteryAtStation } from "../../services/batteries";
 
 dayjs.extend(utc);
 
@@ -291,6 +293,7 @@ export default function ManageSwap() {
   const openInspectModal = (swap) => {
     setInspectingSwap(swap);
     inspectForm.setFieldsValue({
+      batterySource: "EXISTING",
       batteryId: swap.returnedBatteryId || 0,
       condition: "GOOD",
       socPercent: 0,
@@ -302,13 +305,59 @@ export default function ManageSwap() {
   const submitInspect = async () => {
     try {
       const values = await inspectForm.validateFields();
-      await api.post(INSPECT_SWAP_URL(inspectingSwap.swapId), values);
+
+      const { batterySource, batteryId: formBatteryId, ...rest } = values;
+      let finalBatteryId = formBatteryId;
+
+      // Nếu chọn Pin ngoài trạm -> tạo pin mới với status IN_USE
+      if (batterySource === "EXTERNAL") {
+        if (!inspectingSwap?.stationId) {
+          message.error("Không xác định được trạm của swap.");
+          return;
+        }
+
+        try {
+          const created = await createBatteryAtStation(
+            inspectingSwap.stationId,
+            "IN_USE"
+          );
+
+          // tuỳ service trả về, lấy batteryId
+          finalBatteryId =
+            created?.batteryId || created?.data?.batteryId || null;
+
+          if (!finalBatteryId) {
+            message.error("Tạo pin mới thất bại (không lấy được batteryId).");
+            return;
+          }
+
+          message.success(`Đã tạo pin mới #${finalBatteryId} (IN_USE).`);
+        } catch (err) {
+          console.error(err);
+          message.error(
+            err?.response?.data?.message || "Tạo pin mới thất bại."
+          );
+          return;
+        }
+      }
+
+      const payload = {
+        ...rest,
+        batteryId: finalBatteryId,
+      };
+
+      await api.post(INSPECT_SWAP_URL(inspectingSwap.swapId), payload);
       message.success("Đã ghi nhận pin trả về");
       setInspectModalOpen(false);
       setInspectingSwap(null);
+      inspectForm.resetFields();
       fetchAll();
     } catch (e) {
       console.error(e);
+      if (e?.errorFields) {
+        // lỗi validate form
+        return;
+      }
       message.error(
         e?.response?.data?.message || "Ghi nhận pin trả về thất bại."
       );
@@ -620,19 +669,58 @@ export default function ManageSwap() {
       <Modal
         open={inspectModalOpen}
         title={`Inspect return swap #${inspectingSwap?.swapId || ""}`}
-        onCancel={() => setInspectModalOpen(false)}
+        onCancel={() => {
+          setInspectModalOpen(false);
+          setInspectingSwap(null);
+          inspectForm.resetFields();
+        }}
         onOk={submitInspect}
         okText="Ghi nhận"
         destroyOnClose
       >
         <Form form={inspectForm} layout="vertical">
+          {/* CHỌN NGUỒN PIN */}
           <Form.Item
-            label="Battery ID"
-            name="batteryId"
-            rules={[{ required: true, message: "Nhập batteryId" }]}
+            label="Nguồn pin trả về"
+            name="batterySource"
+            initialValue="EXISTING"
+            rules={[{ required: true, message: "Chọn nguồn pin" }]}
           >
-            <InputNumber min={0} style={{ width: "100%" }} />
+            <Radio.Group>
+              <Radio value="EXISTING">Pin đã có trong trạm</Radio>
+              <Radio value="EXTERNAL">Pin ngoài trạm</Radio>
+            </Radio.Group>
           </Form.Item>
+
+          {/* Battery ID: nếu Pin ngoài trạm thì disable + không required */}
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, cur) =>
+              prev.batterySource !== cur.batterySource
+            }
+          >
+            {({ getFieldValue }) => {
+              const isExternal = getFieldValue("batterySource") === "EXTERNAL";
+              return (
+                <Form.Item
+                  label="Battery ID"
+                  name="batteryId"
+                  rules={
+                    isExternal
+                      ? []
+                      : [{ required: true, message: "Nhập batteryId" }]
+                  }
+                >
+                  <InputNumber
+                    min={0}
+                    style={{ width: "100%" }}
+                    disabled={isExternal}
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+
           <Form.Item
             label="Tình trạng"
             name="condition"

@@ -68,6 +68,10 @@ const Support = () => {
   const [tickets, setTickets] = useState([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
 
+  // ==== danh sách trạm ====
+  const [stations, setStations] = useState([]);
+  const [loadingStations, setLoadingStations] = useState(false);
+
   const user = useSelector(selectUser);
   const driverId = useMemo(() => {
     if (user?.driverId) return user.driverId;
@@ -75,6 +79,27 @@ const Support = () => {
     if (user?.id) return user.id;
     return undefined;
   }, [user]);
+
+  // === Lấy danh sách station ===
+  const fetchStations = async () => {
+    setLoadingStations(true);
+    try {
+      const res = await api.get("/api/stations/search", {
+        params: { keyword: " " },
+      });
+      const list = Array.isArray(res.data) ? res.data : [];
+      setStations(list);
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Không tải được danh sách trạm.";
+      message.error(msg);
+      setStations([]);
+    } finally {
+      setLoadingStations(false);
+    }
+  };
 
   // === Gửi ticket ===
   const onFinish = async (values) => {
@@ -126,6 +151,11 @@ const Support = () => {
       setLoadingTickets(false);
     }
   };
+
+  useEffect(() => {
+    // load danh sách trạm cho form
+    fetchStations();
+  }, []);
 
   useEffect(() => {
     if (mode === "list") fetchMyTickets();
@@ -260,12 +290,24 @@ const Support = () => {
               <Input />
             </Form.Item>
 
+            {/* Station chọn từ danh sách */}
             <Form.Item
               name="stationId"
-              label="Station ID"
-              rules={[{ required: true, message: "Vui lòng nhập Station ID" }]}
+              label="Trạm"
+              rules={[{ required: true, message: "Vui lòng chọn trạm" }]}
             >
-              <InputNumber placeholder="VD: 101" style={{ width: "100%" }} />
+              <Select
+                showSearch
+                placeholder="Chọn trạm"
+                loading={loadingStations}
+                optionFilterProp="label"
+                options={stations.map((s) => ({
+                  value: s.stationId,
+                  label: `${s.name || `Trạm #${s.stationId}`} (ID: ${
+                    s.stationId
+                  })`,
+                }))}
+              />
             </Form.Item>
 
             <Form.Item
@@ -316,23 +358,6 @@ const Support = () => {
               </Button>
             </Space>
           </Form>
-
-          {/* <div
-            style={{
-              marginTop: 16,
-              background: "#f6ffed",
-              border: "1px solid #b7eb8f",
-              borderRadius: 8,
-              padding: "10px 12px",
-            }}
-          >
-            <Text type="secondary">
-              <b>Vấn đề về pin:</b> Các sự cố liên quan đến đổi pin, sạc pin,
-              pin lỗi, v.v. <br />
-              <b>Vấn đề về trạm:</b> Các sự cố liên quan đến trạm, thiết bị hoặc
-              nhân viên trạm.
-            </Text>
-          </div> */}
         </Card>
       ) : (
         <Card bordered={false} style={glassCard} bodyStyle={{ padding: 16 }}>
