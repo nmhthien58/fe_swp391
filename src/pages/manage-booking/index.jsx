@@ -449,12 +449,12 @@ export default function ManageSwap() {
       width: 80,
       render: (id) => <Text strong>#{id}</Text>,
     },
-    {
-      title: "Booking ID",
-      dataIndex: "bookingId",
-      key: "bookingId",
-      width: 90,
-    },
+    // {
+    //   title: "Booking ID",
+    //   dataIndex: "bookingId",
+    //   key: "bookingId",
+    //   width: 90,
+    // },
     {
       title: "Tài xế",
       dataIndex: "driverId",
