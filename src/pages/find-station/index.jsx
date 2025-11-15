@@ -793,7 +793,7 @@ const FindStation = () => {
   const disableBookingDate = (current) => {
     if (!current) return false;
     const today = dayjs().startOf("day");
-    const maxDay = today.add(3, "day").endOf("day");
+    const maxDay = today.add(1, "day").endOf("day");
     // chặn ngày trước hôm nay hoặc sau 3 ngày nữa
     return current < today || current > maxDay;
   };
