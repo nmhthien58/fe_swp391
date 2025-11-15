@@ -161,84 +161,81 @@ const PlanHistory = () => {
       }, 0);
   }, [data, plans]);
 
-  const columns = useMemo(
-    () => [
-      {
-        title: "Mã ĐK",
-        dataIndex: "subscriptionId",
-        key: "subscriptionId",
-        width: 90,
+  const columns = [
+    {
+      title: "Mã ĐK",
+      dataIndex: "subscriptionId",
+      key: "subscriptionId",
+      width: 90,
+    },
+    {
+      title: "Tên gói",
+      key: "planName",
+      render: (_, r) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{r?.plan?.name || "-"}</Text>
+          {r?.plan?.description && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {r.plan.description}
+            </Text>
+          )}
+        </Space>
+      ),
+      width: 300,
+    },
+    {
+      title: "Giá",
+      key: "price",
+      render: (_, r) => {
+        const p = plans.find((pl) => pl.name === r.plan?.name);
+        // fallback: nếu không tìm thấy trong plans thì lấy từ r.plan
+        const price = p?.price ?? r?.plan?.price;
+        return vnd(price);
       },
-      {
-        title: "Tên gói",
-        key: "planName",
-        render: (_, r) => (
-          <Space direction="vertical" size={0}>
-            <Text strong>{r?.plan?.name || "-"}</Text>
-            {r?.plan?.description && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {r.plan.description}
-              </Text>
-            )}
-          </Space>
-        ),
-        width: 300,
+      width: 120,
+    },
+    {
+      title: "Thời hạn",
+      key: "durationDays",
+      render: (_, r) => {
+        const p = plans.find((pl) => pl.name === r.plan?.name);
+        const duration = p?.durationDays ?? r?.plan?.durationDays;
+        return duration ? `${duration} ngày` : "-";
       },
-      {
-        title: "Giá",
-        key: "price",
-        render: (_, r) => {
-          const p = plans.find((pl) => pl.name === r.plan?.name);
-          // fallback: nếu không tìm thấy trong plans thì lấy từ r.plan
-          const price = p?.price ?? r?.plan?.price;
-          return vnd(price);
-        },
-        width: 120,
-      },
-      {
-        title: "Thời hạn",
-        key: "durationDays",
-        render: (_, r) => {
-          const p = plans.find((pl) => pl.name === r.plan?.name);
-          const duration = p?.durationDays ?? r?.plan?.durationDays;
-          return duration ? `${duration} ngày` : "-";
-        },
-        width: 120,
-      },
-      {
-        title: "Bắt đầu",
-        key: "startDate",
-        render: (_, r) => fmtVN(r?.startDate),
-        width: 160,
-      },
-      {
-        title: "Kết thúc",
-        key: "endDate",
-        render: (_, r) => fmtVN(r?.endDate),
-        width: 160,
-      },
-      {
-        title: "Trạng thái",
-        key: "status",
-        render: (_, r) => statusTag(r?.status),
-        width: 120,
-      },
-      // {
-      //   title: "Thanh toán",
-      //   key: "payment",
-      //   render: (_, r) => (
-      //     <Space direction="vertical" size={0}>
-      //       {paymentTag(r?.payment)}
-      //       {r?.payment?.amountVnd != null && (
-      //         <Text style={{ fontSize: 12 }}>{vnd(r.payment.amountVnd)}</Text>
-      //       )}
-      //     </Space>
-      //   ),
-      //   width: 140,
-      // },
-    ],
-    []
-  );
+      width: 120,
+    },
+    {
+      title: "Bắt đầu",
+      key: "startDate",
+      render: (_, r) => fmtVN(r?.startDate),
+      width: 160,
+    },
+    {
+      title: "Kết thúc",
+      key: "endDate",
+      render: (_, r) => fmtVN(r?.endDate),
+      width: 160,
+    },
+    {
+      title: "Trạng thái",
+      key: "status",
+      render: (_, r) => statusTag(r?.status),
+      width: 120,
+    },
+    // {
+    //   title: "Thanh toán",
+    //   key: "payment",
+    //   render: (_, r) => (
+    //     <Space direction="vertical" size={0}>
+    //       {paymentTag(r?.payment)}
+    //       {r?.payment?.amountVnd != null && (
+    //         <Text style={{ fontSize: 12 }}>{vnd(r.payment.amountVnd)}</Text>
+    //       )}
+    //     </Space>
+    //   ),
+    //   width: 140,
+    // },
+  ];
 
   return (
     <Card bordered={false} bodyStyle={{ padding: 16 }}>
