@@ -29,6 +29,7 @@ import { selectToken } from "./redux/accountSlice.js";
 import PlanHistory from "./pages/subcription-history/index.jsx";
 import BookingHistory from "./pages/booking-history/index.jsx";
 import ManageSwap from "./pages/manage-booking/index.jsx";
+import MapOnlyPage from "./pages/map-only/index.jsx";
 function RootRedirect() {
   const token = useSelector(selectToken);
   return token ? (
@@ -79,7 +80,10 @@ function App() {
         { path: "swap", element: <ManageBatterySwapTransaction /> },
       ],
     },
-
+    {
+      path: "/map",
+      element: <MapOnlyPage />,
+    },
     {
       path: "/",
       element: <AppLayout />,
@@ -92,6 +96,7 @@ function App() {
           path: "/home",
           element: <Home />,
         },
+
         {
           path: "/login",
           element: <LoginPage />,
