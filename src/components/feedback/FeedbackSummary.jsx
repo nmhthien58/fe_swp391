@@ -45,7 +45,11 @@ const FeedbackSummary = ({ stationId, onClick }) => {
 
   return (
     <div
-      onClick={() => onClick && onClick({ feedbacks })}
+      onClick={() => {
+        if (onClick) {
+          onClick({ feedbacks });
+        }
+      }}
       style={{
         display: "inline-flex",
         alignItems: "center",

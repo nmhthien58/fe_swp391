@@ -1,4 +1,3 @@
-// src/pages/manage-booking/index.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, Tabs, Space, Button, Input, Typography, message } from "antd";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
@@ -6,7 +5,6 @@ import api from "../../config/axios";
 import { toast } from "react-toastify";
 import { createBatteryAtStation } from "../../services/batteries";
 
-// import các component con trong cùng thư mục
 import PendingBookingsTable from "./PendingBookingsTable";
 import ActiveSwapsTable from "./ActiveSwapsTable";
 import HistorySection from "./HistorySection";
@@ -235,7 +233,7 @@ const ManageSwap = () => {
         batteryId: finalBatteryId,
       });
 
-      message.success("Đã ghi nhận pin trả về.");
+      toast.success("Đã ghi nhận pin trả về.");
       setInspectModalOpen(false);
       setInspectingSwap(null);
       fetchAll();
