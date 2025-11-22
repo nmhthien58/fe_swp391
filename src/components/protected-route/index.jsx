@@ -73,7 +73,7 @@ const AuthGate = ({ allow = [], children }) => {
         if (cancelled) return;
         const profile = me?.data?.result || me?.data;
 
-        // Đồng bộ vào Redux (accountSlice.setUser cần map role từ roles[0].userType)
+        // Lưu user vào redux mỗi khi reload
         dispatch(setUser(profile));
       } catch (err) {
         if (cancelled) return;
@@ -84,7 +84,7 @@ const AuthGate = ({ allow = [], children }) => {
           navigate("/login", { replace: true, state: { from: location } });
           return;
         }
-        // Lỗi khác thì cho về trang lỗi/unauthorized tuỳ ý
+        // Lỗi khác thì cho về trang lỗi
         navigate("/unauthorized", { replace: true });
         return;
       } finally {
@@ -102,12 +102,11 @@ const AuthGate = ({ allow = [], children }) => {
   // Đang kiểm tra
   if (checking) return <FullscreenSpinner />;
 
-  // Đến đây: đã có token; nếu allow có giá trị thì kiểm tra quyền
+  // đã có token, nếu allow có giá trị thì kiểm tra quyền
   const isAllowed = allow.length === 0 ? true : allow.includes(role);
 
   if (!isAllowed) {
-    // Đã đăng nhập nhưng thiếu quyền
-    // Hoặc điều hướng cứng (nếu bạn muốn):
+    // Đã đăng nhập nhưng quyền không hợp lệ
     navigate("/", { replace: true });
   }
 

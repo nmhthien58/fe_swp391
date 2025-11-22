@@ -1,4 +1,3 @@
-// src/pages/find-station/index.jsx
 import React, { useEffect, useState } from "react";
 import {
   Layout,
@@ -9,7 +8,6 @@ import {
   Modal,
   Select,
   DatePicker,
-  message,
 } from "antd";
 
 import StationMap from "./StationMap";
@@ -40,6 +38,7 @@ const FindStation = () => {
   const driverId = user?.driverId ?? null;
   const navigate = useNavigate();
 
+  // Các states
   // ===== Vehicle =====
   const [vehicle, setVehicle] = useState(null);
   const [vehLoading, setVehLoading] = useState(false);
@@ -59,7 +58,7 @@ const FindStation = () => {
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [bookingStationId, setBookingStationId] = useState(null);
   const [bookingTime, setBookingTime] = useState(
-    dayjs().add(30, "minute").second(0).millisecond(0)
+    dayjs().add(10, "minute").second(0).millisecond(0)
   );
 
   // ===== Feedback Modal =====
@@ -84,7 +83,7 @@ const FindStation = () => {
       const res = await api.get(`/api/stations/search`, {
         params: { keyword: " " },
       });
-      const data = Array.isArray(res.data) ? res.data : [];
+      const data = res.data;
       setInitialStations(data);
       setMapStations(data);
     } catch {
@@ -96,7 +95,7 @@ const FindStation = () => {
     }
   };
 
-  // Search debounce
+  // Search lun sau khi người dùng nhập
   useEffect(() => {
     const t = setTimeout(() => {
       const kw = typed.trim() === "" ? " " : typed;
@@ -111,7 +110,7 @@ const FindStation = () => {
       const res = await api.get(`/api/stations/search`, {
         params: { keyword: kw },
       });
-      setMapStations(Array.isArray(res.data) ? res.data : []);
+      setMapStations(res.data);
     } catch {
       setMapStations([]);
     } finally {
@@ -195,7 +194,7 @@ const FindStation = () => {
   // -----------------------------
   const openBookingForStation = (stationId) => {
     setBookingStationId(stationId);
-    setBookingTime(dayjs().add(30, "minute").second(0).millisecond(0));
+    setBookingTime(dayjs().add(10, "minute").second(0).millisecond(0));
     setBookingOpen(true);
   };
 
@@ -211,11 +210,11 @@ const FindStation = () => {
 
   const submitBooking = async () => {
     if (!bookingStationId || !bookingTime) {
-      message.warning("Vui lòng chọn trạm và thời gian.");
+      toast.error("Vui lòng chọn trạm và thời gian.");
       return;
     }
     if (!driverId) {
-      message.error("Thiếu driverId. Hãy đăng nhập lại.");
+      toast.error("Bạn chưa đăng nhập. Hãy đăng nhập để đặt lịch.");
       return;
     }
 
@@ -256,9 +255,6 @@ const FindStation = () => {
   const fmtVN = (iso) =>
     iso ? dayjs(iso).add(7, "hour").format("DD/MM/YYYY HH:mm") : "-";
 
-  // -----------------------------
-  // Render JSX
-  // -----------------------------
   return (
     <Content style={{ padding: "24px 50px" }}>
       <Row gutter={[24, 24]}>
@@ -276,10 +272,14 @@ const FindStation = () => {
             glassCard={glassCard}
           />
         </Col>
-
         {/* Cột phải (liên kết phương tiện, list trạm) */}
+
         <Col xl={8} lg={24} xs={24}>
-          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <Space
+            direction="vertical"
+            size="large"
+            style={{ width: "100%", display: "flex", justifyContent: "center" }}
+          >
             {user && (
               <AccountAndPlanCard
                 user={user}

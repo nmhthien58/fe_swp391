@@ -26,6 +26,7 @@ const FeedbackSummary = ({ stationId, onClick }) => {
         const len = data.length;
         setAvg(len ? total / len : 0);
         setCount(len);
+        // eslint-disable-next-line no-unused-vars
       } catch (e) {
         if (mounted) {
           setFeedbacks([]);

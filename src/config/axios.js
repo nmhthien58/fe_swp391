@@ -51,10 +51,6 @@ api.interceptors.response.use(
       if (currentPath !== "/stations") {
         toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
       }
-      // Tuỳ bạn: điều hướng ngay tại đây (đơn giản, không phụ thuộc router)
-      // window.location.assign("/login");
-
-      // Hoặc: để Route Guard tự điều hướng dựa trên Redux (khuyến nghị)
     }
 
     // 403: đã đăng nhập nhưng thiếu quyền

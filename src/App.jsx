@@ -14,7 +14,6 @@ import Overview from "./pages/overview-page/index.jsx";
 import Homepage from "./components/homepage/layout.jsx";
 import StaffDashboard from "./components/dashboard/staff.jsx";
 import ManageStockBattery from "./pages/manage-stockbattery/index.jsx";
-import ManageBatterySwapTransaction from "./pages/manage-batteryswaptransaction/index.jsx";
 import AuthGate from "./components/protected-route/index.jsx";
 import FindStation from "./pages/find-station/index.jsx";
 import TransHistory from "./pages/transaction-history/index.jsx";
@@ -29,7 +28,6 @@ import { selectToken } from "./redux/accountSlice.js";
 import PlanHistory from "./pages/subcription-history/index.jsx";
 import BookingHistory from "./pages/booking-history/index.jsx";
 import ManageSwap from "./pages/manage-booking/index.jsx";
-import MapOnlyPage from "./pages/map-only/index.jsx";
 function RootRedirect() {
   const token = useSelector(selectToken);
   return token ? (
@@ -77,13 +75,10 @@ function App() {
         },
         { path: "stock", element: <ManageStockBattery /> },
         { path: "booking", element: <ManageSwap /> },
-        { path: "swap", element: <ManageBatterySwapTransaction /> },
+        { path: "swap", element: <ManageSwap /> },
       ],
     },
-    {
-      path: "/map",
-      element: <MapOnlyPage />,
-    },
+
     {
       path: "/",
       element: <AppLayout />,

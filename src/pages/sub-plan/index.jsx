@@ -9,7 +9,6 @@ import {
   Space,
   Spin,
   message,
-  Modal,
   Switch,
   Radio,
   Skeleton,
@@ -32,6 +31,9 @@ import { useSelector } from "react-redux";
 import { selectToken } from "../../redux/accountSlice";
 import api from "../../config/axios";
 
+import PurchasePlanModal from "./PurchasePlanModal";
+import VnpayVerifyModal from "./VnpayVerifyModal";
+
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
@@ -49,29 +51,6 @@ const glassCard = {
   boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
 };
 
-// ===== Helper: dựng verify URL từ link VNPay trả về =====
-const VERIFY_PATH = "/api/payments/verify";
-
-function buildVerifyUrl(pastedUrl) {
-  if (!pastedUrl || typeof pastedUrl !== "string") return "";
-
-  // Lấy phần query ?vnp_...
-  let search = "";
-  try {
-    const u = new URL(pastedUrl);
-    search = u.search || "";
-  } catch {
-    // Nếu không phải URL đầy đủ, cố gắng lấy phần sau dấu ?
-    const idx = pastedUrl.indexOf("?");
-    search = idx >= 0 ? pastedUrl.slice(idx) : pastedUrl;
-    if (search && search[0] !== "?") search = "?" + search;
-  }
-
-  // Lấy baseURL từ axios instance
-  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "") || "";
-  return `${base}${VERIFY_PATH}${search}`;
-}
-
 const Plans = () => {
   const token = useSelector(selectToken);
 
@@ -86,18 +65,14 @@ const Plans = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [autoRenew, setAutoRenew] = useState(true);
 
-  // payment options
-  const [paymentMethod, setPaymentMethod] = useState("CARD"); // "CARD" | "CASH"
+  // payment method
+  const [paymentMethod, setPaymentMethod] = useState("CARD"); // mặc định card
 
   // sort UI
   const [sortKey, setSortKey] = useState("popular");
 
   // ===== Modal verify VNPay =====
   const [verifyOpen, setVerifyOpen] = useState(false);
-  const [verifyInput, setVerifyInput] = useState("");
-  const [verifyLoading, setVerifyLoading] = useState(false);
-  const [verifyUrlBuilt, setVerifyUrlBuilt] = useState("");
-  const [verifyResult, setVerifyResult] = useState("");
 
   const fetchPlans = async () => {
     try {
@@ -128,6 +103,7 @@ const Plans = () => {
 
   const handleSubscribe = async () => {
     if (!selectedPlan) return;
+
     try {
       setConfirmLoading(true);
 
@@ -168,23 +144,25 @@ const Plans = () => {
         },
       });
 
+      // Nếu thanh toán tiền mặt thì không cần VNPay
       if (paymentMethod === "CASH") {
-        message.success("Đã tạo đăng ký, thanh toán tiền mặt tại quầy.");
+        message.success(
+          "Đăng ký gói thành công. Vui lòng thanh toán tiền mặt tại quầy."
+        );
         setOpen(false);
+        setSelectedPlan(null);
+        setVoucherCode("");
         return;
       }
 
       const paymentUrl = typeof payRes?.data === "string" ? payRes.data : null;
       if (!paymentUrl) throw new Error("Không nhận được paymentUrl từ API.");
 
-      // ✅ Mở VNPay ở tab mới
+      // Mở VNPay
       window.open(paymentUrl, "_blank", "noopener,noreferrer");
       message.success("Đang mở trang thanh toán VNPay...");
 
-      // ✅ Mở modal verify để người dùng dán link trả về
-      setVerifyInput("");
-      setVerifyUrlBuilt("");
-      setVerifyResult("");
+      // Mở modal verify để người dùng dán link trả về
       setVerifyOpen(true);
 
       setOpen(false);
@@ -197,49 +175,6 @@ const Plans = () => {
       );
     } finally {
       setConfirmLoading(false);
-    }
-  };
-
-  // ----- Verify VNPay -----
-  // eslint-disable-next-line no-unused-vars
-  const handleBuildVerifyUrl = () => {
-    const url = buildVerifyUrl(verifyInput.trim());
-    setVerifyUrlBuilt(url);
-    if (!url) {
-      message.error(
-        "Không dựng được verify URL. Vui lòng kiểm tra link đã dán."
-      );
-    }
-  };
-
-  const handleVerifyCall = async () => {
-    try {
-      setVerifyLoading(true);
-      setVerifyResult("");
-
-      const url = verifyUrlBuilt || buildVerifyUrl(verifyInput.trim());
-      if (!url) {
-        message.error("Thiếu verify URL.");
-        return;
-      }
-
-      const headers = { accept: "*/*" };
-      if (token) headers.Authorization = `Bearer ${token}`;
-
-      const res = await fetch(url, { method: "GET", headers });
-      const text = await res.text();
-      setVerifyResult(text);
-
-      if (res.ok) {
-        message.success("Verify thành công");
-      } else {
-        message.error(`Verify thất bại (HTTP ${res.status})`);
-      }
-    } catch (e) {
-      console.error(e);
-      message.error("Lỗi khi gọi verify");
-    } finally {
-      setVerifyLoading(false);
     }
   };
 
@@ -275,12 +210,14 @@ const Plans = () => {
       case "swapDesc":
         arr.sort((a, b) => (b.swapLimit ?? 0) - (a.swapLimit ?? 0));
         break;
+      case "popular":
       default:
         arr.sort((a, b) => {
           if (a.planId === recommendedId) return -1;
           if (b.planId === recommendedId) return 1;
           return pricePerDay(a) - pricePerDay(b);
         });
+        break;
     }
     return arr;
   }, [plans, sortKey, recommendedId]);
@@ -295,9 +232,6 @@ const Plans = () => {
   };
 
   const openVerifyModalManual = () => {
-    setVerifyInput("");
-    setVerifyUrlBuilt("");
-    setVerifyResult("");
     setVerifyOpen(true);
   };
 
@@ -309,10 +243,24 @@ const Plans = () => {
         style={{ ...glassCard, marginBottom: 16 }}
         bodyStyle={{ padding: 16 }}
       >
-        <Row align="middle" justify="space-between" gutter={[12, 12]}>
-          <Col>
-            <Space align="center" wrap>
-              <Text type="secondary">Sắp xếp: </Text>
+        <Row align="middle" gutter={[16, 16]}>
+          <Col xs={24} md={16}>
+            <Space direction="vertical" size={4}>
+              <Title level={3} style={{ margin: 0 }}>
+                Chọn gói thuê pin phù hợp
+              </Title>
+              <Text type="secondary">
+                Các gói dịch vụ với thời hạn và số lượt đổi pin khác nhau, giúp
+                bạn chủ động chi phí hàng tháng.
+              </Text>
+            </Space>
+          </Col>
+          <Col xs={24} md={8}>
+            <Space
+              style={{ width: "100%", justifyContent: "flex-end" }}
+              wrap
+              size={8}
+            >
               <Segmented
                 size="large"
                 value={sortKey}
@@ -324,297 +272,217 @@ const Plans = () => {
                   { label: "Lượt đổi ↑", value: "swapDesc" },
                 ]}
               />
-
-              {/* ✅ Nút mở modal verify thủ công */}
-              <Button
-                onClick={openVerifyModalManual}
-                icon={<CheckCircleOutlined />}
-              >
-                Xác thực VNPay
-              </Button>
             </Space>
           </Col>
         </Row>
       </Card>
 
-      {/* ======= CONTENT PLANS ======= */}
-      {loading ? (
-        <Row gutter={[24, 24]}>
-          {[...Array(6)].map((_, i) => (
-            <Col xs={24} sm={12} md={8} lg={6} key={i}>
-              <Card
-                bordered={false}
-                style={glassCard}
-                bodyStyle={{ padding: 16 }}
-              >
-                <Skeleton active paragraph={{ rows: 4 }} />
+      <Row gutter={[24, 24]}>
+        {/* ===== CỘT DANH SÁCH GÓI ===== */}
+        <Col xs={24} lg={16}>
+          <Card bordered={false} style={glassCard}>
+            {loading ? (
+              <Row gutter={[16, 16]}>
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <Col xs={24} sm={12} md={8} lg={6} key={idx}>
+                    <Card
+                      style={{ ...glassCard, height: "100%" }}
+                      bodyStyle={{ padding: 16 }}
+                    >
+                      <Skeleton active paragraph={{ rows: 4 }} />
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            ) : errText ? (
+              <Result
+                status="error"
+                title="Không thể tải gói đăng ký"
+                subTitle={errText}
+                extra={
+                  <Button onClick={fetchPlans} type="primary">
+                    Thử lại
+                  </Button>
+                }
+              />
+            ) : !sortedPlans.length ? (
+              <Card bordered={false} style={glassCard}>
+                <Empty description="Chưa có gói nào khả dụng" />
               </Card>
-            </Col>
-          ))}
-        </Row>
-      ) : errText ? (
-        <Result
-          status="error"
-          title="Không thể tải gói đăng ký"
-          subTitle={errText}
-          extra={
-            <Button onClick={fetchPlans} type="primary">
-              Thử lại
-            </Button>
-          }
-        />
-      ) : !sortedPlans.length ? (
-        <Card bordered={false} style={glassCard}>
-          <Empty description="Chưa có gói nào khả dụng" />
-        </Card>
-      ) : (
-        <Row gutter={[24, 24]}>
-          {sortedPlans.map((plan) => {
-            // eslint-disable-next-line no-unused-vars
-            const isRecommended = plan.planId === recommendedId;
-            const ppd = pricePerDay(plan);
-            return (
-              <Col xs={24} sm={12} md={8} lg={6} key={plan.planId}>
-                <Badge.Ribbon text="Active" color="green">
-                  <Card
-                    hoverable
-                    bordered={false}
-                    style={{ ...glassCard, height: "100%" }}
-                    bodyStyle={{
-                      padding: 16,
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    {/* header */}
-                    <Space align="center" style={{ marginBottom: 8 }}>
-                      <PlanHeaderIcon name={plan.name} />
-                      <Text strong style={{ fontSize: 16 }}>
-                        {plan.name}
-                      </Text>
-                    </Space>
-
-                    {/* price block */}
-                    <div
-                      style={{
-                        background: "#f6ffed",
-                        border: "1px solid #b7eb8f",
-                        borderRadius: 10,
-                        padding: "10px 12px",
-                        marginBottom: 12,
-                      }}
+            ) : (
+              <Row gutter={[24, 24]} style={{ alignItems: "stretch" }}>
+                {sortedPlans.map((plan) => {
+                  const ppd = pricePerDay(plan);
+                  return (
+                    <Col
+                      xs={24}
+                      sm={12}
+                      md={8}
+                      lg={6}
+                      key={plan.planId}
+                      style={{ display: "flex" }}
                     >
-                      <Space direction="vertical" size={2}>
-                        <Text style={{ fontSize: 22, fontWeight: 700 }}>
-                          {currencyVND(plan.price)}
-                        </Text>
-                        <Text type="secondary">
-                          ~ {isFinite(ppd) ? currencyVND(Math.round(ppd)) : "-"}{" "}
-                          / ngày
-                        </Text>
-                      </Space>
-                    </div>
+                      <Badge.Ribbon text="Active" color="green">
+                        <Card
+                          hoverable
+                          bordered={false}
+                          style={{ ...glassCard, height: "100%" }}
+                          bodyStyle={{
+                            padding: 16,
+                            display: "flex",
+                            flexDirection: "column",
+                            flex: 1, // để body chiếm hết chiều cao
+                            height: "100%",
+                          }}
+                        >
+                          {/* header */}
+                          <Space align="center" style={{ marginBottom: 8 }}>
+                            <PlanHeaderIcon name={plan.name} />
+                            <Text strong style={{ fontSize: 16 }}>
+                              {plan.name}
+                            </Text>
+                          </Space>
 
-                    {/* features */}
-                    <Space
-                      direction="vertical"
-                      size="small"
-                      style={{ width: "100%" }}
-                    >
-                      <Text type="secondary">
-                        {plan.description || "Không có mô tả"}
-                      </Text>
-                      <Text>
-                        <CheckCircleOutlined style={{ color: "#52c41a" }} />{" "}
-                        <strong>Thời hạn:</strong> {plan.durationDays} ngày
-                      </Text>
-                      <Text>
-                        <CheckCircleOutlined style={{ color: "#52c41a" }} />{" "}
-                        <strong>Lượt đổi miễn phí:</strong> {plan.swapLimit}
-                      </Text>
-                      {plan.pricePerExtraSwap != null && (
-                        <Text>
-                          <CheckCircleOutlined style={{ color: "#52c41a" }} />{" "}
-                          <strong>Phí vượt lượt:</strong>{" "}
-                          {currencyVND(plan.pricePerExtraSwap)}
-                        </Text>
-                      )}
-                    </Space>
+                          {/* price block */}
+                          <div
+                            style={{
+                              background: "#f6ffed",
+                              border: "1px solid #b7eb8f",
+                              borderRadius: 10,
+                              padding: "10px 12px",
+                              marginBottom: 12,
+                            }}
+                          >
+                            <Space direction="vertical" size={2}>
+                              <Text
+                                style={{
+                                  fontSize: 22,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {currencyVND(plan.price)}
+                              </Text>
+                              <Text type="secondary">
+                                ~{" "}
+                                {isFinite(ppd)
+                                  ? currencyVND(Math.round(ppd))
+                                  : "-"}{" "}
+                                / ngày
+                              </Text>
+                            </Space>
+                          </div>
 
-                    <Divider style={{ margin: "12px 0" }} />
+                          {/* features */}
+                          <Space
+                            direction="vertical"
+                            size="small"
+                            style={{ width: "100%" }}
+                          >
+                            <Text type="secondary">
+                              {plan.description || "Không có mô tả"}
+                            </Text>
+                            <Text>
+                              <CheckCircleOutlined
+                                style={{ color: "#52c41a" }}
+                              />{" "}
+                              <strong>Thời hạn:</strong> {plan.durationDays}{" "}
+                              ngày
+                            </Text>
+                            <Text>
+                              <CheckCircleOutlined
+                                style={{ color: "#52c41a" }}
+                              />{" "}
+                              <strong>Lượt đổi miễn phí:</strong>{" "}
+                              {plan.swapLimit}
+                            </Text>
+                            {plan.pricePerExtraSwap != null && (
+                              <Text>
+                                <CheckCircleOutlined
+                                  style={{ color: "#52c41a" }}
+                                />{" "}
+                                <strong>Phí vượt lượt:</strong>{" "}
+                                {currencyVND(plan.pricePerExtraSwap)}
+                              </Text>
+                            )}
+                          </Space>
 
-                    {/* footer actions */}
-                    <div style={{ marginTop: "auto" }}>
-                      <Space
-                        style={{
-                          width: "100%",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <Tag color="green">Active</Tag>
-                        <Tooltip title="Ưu tiên gói có tỉ lệ lượt đổi/giá tốt">
-                          <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
-                        </Tooltip>
-                      </Space>
-                      <Button
-                        type="primary"
-                        block
-                        style={{ marginTop: 10 }}
-                        onClick={() => openSubscribe(plan)}
-                      >
-                        Đăng ký gói
-                      </Button>
-                    </div>
-                  </Card>
-                </Badge.Ribbon>
-              </Col>
-            );
-          })}
-        </Row>
-      )}
+                          <Divider style={{ margin: "12px 0" }} />
+
+                          {/* footer actions */}
+                          <div style={{ marginTop: "auto" }}>
+                            <Space
+                              style={{
+                                width: "100%",
+                                justifyContent: "space-between",
+                              }}
+                            ></Space>
+                            <Button
+                              type="primary"
+                              block
+                              style={{ marginTop: 10 }}
+                              onClick={() => openSubscribe(plan)}
+                            >
+                              Đăng ký gói
+                            </Button>
+                          </div>
+                        </Card>
+                      </Badge.Ribbon>
+                    </Col>
+                  );
+                })}
+              </Row>
+            )}
+          </Card>
+        </Col>
+
+        {/* ===== CỘT PHẢI ===== */}
+        <Col xs={24} lg={8}>
+          <Space direction="vertical" style={{ width: "100%" }} size={16}>
+            <Card bordered={false} style={glassCard}>
+              <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                <Space align="center">
+                  <InfoCircleOutlined style={{ color: "#1677ff" }} />
+                  <Text strong>Xác thực thanh toán VNPay</Text>
+                </Space>
+                <Text type="secondary">
+                  Sau khi thanh toán, bấm vào nút ở dưới và dán URL trả về để
+                  xác thực thanh toán.
+                </Text>
+                <Button
+                  onClick={openVerifyModalManual}
+                  icon={<CheckCircleOutlined />}
+                >
+                  Xác thực VNPay
+                </Button>
+              </Space>
+            </Card>
+          </Space>
+        </Col>
+      </Row>
 
       {/* ===== Modal chọn gói / thanh toán ===== */}
-      <Modal
+      <PurchasePlanModal
         open={open}
-        onOk={handleSubscribe}
         onCancel={() => setOpen(false)}
+        onOk={handleSubscribe}
         confirmLoading={confirmLoading}
-        okText={
-          paymentMethod === "CARD" ? "Xác nhận & Thanh toán" : "Tạo đăng ký"
-        }
-        cancelText="Hủy"
-        title="Xác nhận đăng ký gói"
-      >
-        {selectedPlan ? (
-          <Space direction="vertical" style={{ width: "100%" }}>
-            <Space
-              align="center"
-              style={{ justifyContent: "space-between", width: "100%" }}
-            >
-              <Space align="center">
-                <PlanHeaderIcon name={selectedPlan.name} />
-                <Text strong style={{ fontSize: 16 }}>
-                  {selectedPlan.name}
-                </Text>
-              </Space>
-              <Tag color="green">Active</Tag>
-            </Space>
-
-            <div
-              style={{
-                background: "#f0f5ff",
-                border: "1px solid #adc6ff",
-                borderRadius: 10,
-                padding: "8px 12px",
-              }}
-            >
-              <Text>
-                <strong>Giá gói:</strong> {currencyVND(selectedPlan.price)} •{" "}
-                <strong>Thời hạn:</strong> {selectedPlan.durationDays} ngày •{" "}
-                <strong>Lượt đổi miễn phí:</strong>{" "}
-                {selectedPlan.swapLimit ?? 0}
-              </Text>
-            </div>
-
-            <Space align="center">
-              <Switch checked={autoRenew} onChange={setAutoRenew} />
-              <Text>Tự gia hạn khi hết hạn</Text>
-            </Space>
-
-            <div style={{ marginTop: 8 }}>
-              <Text strong>Phương thức thanh toán:</Text>
-              <Radio.Group
-                style={{ display: "block", marginTop: 8 }}
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              >
-                <Radio value="CARD">Thanh toán online (VNPay)</Radio>
-                {/* <Radio value="CASH">Tiền mặt</Radio> */}
-              </Radio.Group>
-            </div>
-            <div style={{ marginTop: 16 }}>
-              <Text strong>Mã giảm giá (nếu có):</Text>
-              <Input
-                placeholder="Nhập mã voucher..."
-                value={voucherCode}
-                onChange={(e) => setVoucherCode(e.target.value)}
-                maxLength={50}
-                style={{ marginTop: 6 }}
-              />
-            </div>
-          </Space>
-        ) : (
-          <Spin />
-        )}
-      </Modal>
+        selectedPlan={selectedPlan}
+        autoRenew={autoRenew}
+        setAutoRenew={setAutoRenew}
+        paymentMethod={paymentMethod}
+        setPaymentMethod={setPaymentMethod}
+        voucherCode={voucherCode}
+        setVoucherCode={setVoucherCode}
+        currencyVND={currencyVND}
+        PlanHeaderIcon={PlanHeaderIcon}
+      />
 
       {/* ===== Modal verify VNPay sau khi bấm thanh toán ===== */}
-      <Modal
+      <VnpayVerifyModal
         open={verifyOpen}
-        onCancel={() => setVerifyOpen(false)}
-        title="Xác thực thanh toán VNPay"
-        footer={[
-          // <Button key="build" onClick={handleBuildVerifyUrl}>
-          //   Tạo verify URL
-          // </Button>,
-          <Button
-            key="verify"
-            type="primary"
-            loading={verifyLoading}
-            onClick={handleVerifyCall}
-          >
-            {verifyLoading ? "Đang xác thực..." : "Xác thực thanh toán"}
-          </Button>,
-        ]}
-      >
-        <Space direction="vertical" size={8} style={{ width: "100%" }}>
-          <Text type="secondary">
-            Sau khi thanh toán trên VNPay, dán URL VNPay trả về (ví dụ
-            <code style={{ fontSize: 12 }}>
-              {" "}
-              .../payments/vnpay/return?...vnp_*{" "}
-            </code>
-            ) vào ô dưới đây để xác thực.
-          </Text>
-
-          <TextArea
-            rows={3}
-            placeholder="Paste URL trả về từ VNPay ở đây..."
-            value={verifyInput}
-            onChange={(e) => setVerifyInput(e.target.value)}
-          />
-
-          {verifyUrlBuilt && (
-            <>
-              <Text type="secondary">Verify URL:</Text>
-              <div
-                style={{
-                  overflowX: "auto",
-                  fontFamily: "monospace",
-                  fontSize: 12,
-                }}
-              >
-                {verifyUrlBuilt}
-              </div>
-            </>
-          )}
-
-          {verifyResult && (
-            <pre
-              style={{
-                marginTop: 8,
-                background: "#f6f6f6",
-                padding: 12,
-                borderRadius: 8,
-                maxHeight: 280,
-                overflow: "auto",
-              }}
-            >
-              {verifyResult}
-            </pre>
-          )}
-        </Space>
-      </Modal>
+        onClose={() => setVerifyOpen(false)}
+        token={token}
+      />
     </div>
   );
 };

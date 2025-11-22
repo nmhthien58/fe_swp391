@@ -22,7 +22,7 @@ const { Text } = Typography;
 const GOONG_MAPTILES_KEY = "5rWK5vcJS8dTPc40MUoG5vgaiuYY4tk2FTnoh6AK";
 const GOONG_DIRECTIONS_KEY = "hz2CGz7GrqThwJGquwAnyAZrbJgsPEgjztaRd3zo";
 const GOONG_DIRECTIONS_URL = "https://rsapi.goong.io/Direction";
-const DEFAULT_CENTER = [106.7009, 10.7769]; // [lng, lat] HCMC;
+const DEFAULT_CENTER = [106.7009, 10.7769]; // tọa độ tphcm;
 
 // Vẽ polygon xấp xỉ hình tròn (accuracy)
 function circlePolygon([lng, lat], radiusMeters, points = 64) {
@@ -101,7 +101,7 @@ const StationMap = ({
   searchValue,
   onSearchChange,
   user,
-  onOpenBookingQuick, // mở modal đặt lịch nhanh
+  onOpenBookingQuick, // mở modal đặt lịch trên thanh tìm kiếm
   onOpenBookingForStation, // mở modal từ marker
   onNearestChange, // báo cho parent biết trạm gần nhất
   glassCard,

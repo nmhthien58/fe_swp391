@@ -1,170 +1,36 @@
-// src/pages/ManageUser.jsx
+// src/pages/manage-user/index.jsx
 import React, { useEffect, useState } from "react";
-import {
-  Button,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Select,
-  Table,
-  Tag,
-  Switch,
-  InputNumber,
-} from "antd";
+import { Button, Form } from "antd";
 import { useForm } from "antd/es/form/Form";
 import { toast } from "react-toastify";
 import api from "../../config/axios";
-import {
-  PlusOutlined,
-  ReloadOutlined,
-  EditOutlined,
-  DeleteOutlined,
-} from "@ant-design/icons";
+import { PlusOutlined } from "@ant-design/icons";
+
+import UserHeader from "./UserHeader";
+import UserTable from "./UserTable";
+import UserFormModal from "./UserFormModal";
+import AssignStaffModal from "./AssignStaffModal";
 
 const ManageUser = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // modal tạo / sửa user
   const [open, setOpen] = useState(false);
   const [form] = useForm();
 
-  // ===== Modal assign staff =====
+  // modal assign staff
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignForm] = useForm();
   const [assigningUser, setAssigningUser] = useState(null);
   const [assignSubmitting, setAssignSubmitting] = useState(false);
 
-  // Phân trang (client-side vì /api/getDrivers không phân trang)
+  // phân trang client-side
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
     total: 0,
   });
-
-  // ===== Cột bảng =====
-  const columns = [
-    {
-      title: "Driver ID",
-      dataIndex: "driverId",
-      key: "driverId",
-      width: 110,
-    },
-    {
-      title: "Tên đăng nhập",
-      dataIndex: "userName",
-      key: "userName",
-    },
-    {
-      title: "Email",
-      dataIndex: "email",
-      key: "email",
-    },
-    {
-      title: "Họ tên",
-      dataIndex: "fullName",
-      key: "fullName",
-    },
-    {
-      title: "Trạng thái",
-      dataIndex: "status",
-      key: "status",
-      width: 120,
-      render: (status) => (
-        <Tag color={status ? "green" : "red"}>
-          {status ? "Đang hoạt động" : "Ngừng"}
-        </Tag>
-      ),
-    },
-    {
-      title: "Vai trò",
-      dataIndex: "roles",
-      key: "roles",
-      render: (roles) =>
-        Array.isArray(roles)
-          ? roles.map((r, i) => {
-              const type = r?.userType;
-              let color = "blue";
-              if (type === "ADMIN") color = "red";
-              if (type === "DRIVER") color = "green";
-              if (type === "STAFF") color = "geekblue";
-              return (
-                <Tag color={color} key={i}>
-                  {type}
-                </Tag>
-              );
-            })
-          : null,
-    },
-    {
-      title: "Thao tác",
-      key: "action",
-      width: 280,
-      render: (_, record) => {
-        const isStaff =
-          Array.isArray(record.roles) &&
-          record.roles.some((r) => r?.userType === "STAFF");
-
-        return (
-          <>
-            <Button
-              type="primary"
-              icon={<EditOutlined />}
-              size="small"
-              onClick={() => {
-                setOpen(true);
-                form.setFieldsValue({
-                  driverId: record.driverId,
-                  userName: record.userName,
-                  email: record.email,
-                  fullName: record.fullName,
-                  status: !!record.status,
-                  role: record?.roles?.[0]?.userType || "STAFF",
-                  password: undefined,
-                });
-              }}
-              style={{ marginRight: 8 }}
-            >
-              Sửa
-            </Button>
-
-            <Popconfirm
-              title="Xóa tài khoản?"
-              description="Bạn có chắc chắn muốn xóa tài khoản này?"
-              okText="Xóa"
-              cancelText="Hủy"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => handleDelete(record.driverId)}
-            >
-              <Button danger size="small" icon={<DeleteOutlined />}>
-                Xóa
-              </Button>
-            </Popconfirm>
-
-            {isStaff && (
-              <Button
-                size="small"
-                style={{ marginRight: 8 }}
-                onClick={() => {
-                  setAssigningUser(record);
-                  assignForm.setFieldsValue({
-                    driverId: record.driverId,
-                    stationId: undefined,
-                    workShift: "",
-                    notes: "",
-                    active: true,
-                  });
-                  setAssignOpen(true);
-                }}
-              >
-                Assign Staff
-              </Button>
-            )}
-          </>
-        );
-      },
-    },
-  ];
 
   // ===== API =====
   const fetchUsers = async () => {
@@ -203,8 +69,9 @@ const ManageUser = () => {
     };
 
     const password = values.password?.trim();
+
+    // tạo mới STAFF
     if (!values.driverId) {
-      // TẠO STAFF MỚI → /api/admin/register?userRoleChoice=STAFF
       if (!password) {
         toast.error("Vui lòng nhập mật khẩu khi tạo Staff mới.");
         return;
@@ -228,7 +95,7 @@ const ManageUser = () => {
         toast.error(msg);
       }
     } else {
-      // CẬP NHẬT DRIVER/USER → /api/updateDriver/{driverId}
+      // cập nhật user
       if (password) {
         payload.password = password;
       }
@@ -250,7 +117,7 @@ const ManageUser = () => {
     }
   };
 
-  // ===== Submit assign staff =====
+  // assign staff
   const submitAssignStaff = async () => {
     try {
       const values = await assignForm.validateFields();
@@ -269,8 +136,7 @@ const ManageUser = () => {
       assignForm.resetFields();
     } catch (err) {
       if (err?.errorFields) {
-        // lỗi validate form, không báo toast
-        return;
+        return; // lỗi validate form
       }
       console.error("assign staff error:", err?.response?.data || err);
       const msg =
@@ -288,61 +154,59 @@ const ManageUser = () => {
   }, []);
 
   const handleTableChange = (pager) => {
-    setPagination({
-      ...pagination,
+    setPagination((prev) => ({
+      ...prev,
       current: pager.current,
       pageSize: pager.pageSize,
+    }));
+  };
+
+  // mở modal tạo mới
+  const handleOpenCreate = () => {
+    form.resetFields();
+    form.setFieldsValue({
+      status: true,
+      role: "STAFF",
+    });
+    setOpen(true);
+  };
+
+  // mở modal edit user
+  const handleEditUser = (record) => {
+    setOpen(true);
+    form.setFieldsValue({
+      driverId: record.driverId,
+      userName: record.userName,
+      email: record.email,
+      fullName: record.fullName,
+      status: !!record.status,
+      role: record?.roles?.[0]?.userType || "STAFF",
+      password: undefined,
     });
   };
 
-  // ===== UI =====
+  // mở modal assign staff
+  const handleAssignStaff = (record) => {
+    setAssigningUser(record);
+    assignForm.setFieldsValue({
+      driverId: record.driverId,
+      stationId: undefined,
+      workShift: "",
+      notes: "",
+      active: true,
+    });
+    setAssignOpen(true);
+  };
+
   return (
     <>
-      {/* Header đẹp + tiếng Việt */}
-      <div
-        style={{
-          marginBottom: 24,
-          padding: 16,
-          borderRadius: 12,
-          background:
-            "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(236,72,153,0.08))",
-          border: "1px solid rgba(148,163,184,0.35)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: "#0f172a",
-              marginBottom: 4,
-            }}
-          >
-            Quản lý tài khoản người dùng
-          </div>
-          <div style={{ color: "#64748b", fontSize: 13 }}>
-            Xem danh sách tài khoản driver / staff, tạo mới Staff và gán Staff
-            vào trạm làm việc.
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 8 }}>
+      <UserHeader
+        onAddStaff={handleOpenCreate}
+        addButton={
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => {
-              form.resetFields();
-              form.setFieldsValue({
-                status: true,
-                role: "STAFF",
-              });
-              setOpen(true);
-            }}
+            onClick={handleOpenCreate}
             style={{
               fontWeight: 600,
               borderRadius: 8,
@@ -351,193 +215,41 @@ const ManageUser = () => {
           >
             Add Staff
           </Button>
-        </div>
-      </div>
-
-      {/* Bảng danh sách */}
-      <Table
-        columns={columns}
-        dataSource={users}
-        rowKey={(r) => r.driverId ?? r.id}
-        loading={loading}
-        pagination={{
-          ...pagination,
-          showSizeChanger: true,
-          showTotal: (total) => `Tổng cộng ${total} tài khoản`,
-        }}
-        onChange={handleTableChange}
-        bordered
-        size="middle"
+        }
       />
 
-      {/* Modal tạo / sửa */}
-      <Modal
-        title={
-          form.getFieldValue("driverId")
-            ? "Cập nhật tài khoản"
-            : "Tạo tài khoản Staff"
-        }
+      <UserTable
+        users={users}
+        loading={loading}
+        pagination={pagination}
+        onChange={handleTableChange}
+        onEditUser={handleEditUser}
+        onDeleteUser={handleDelete}
+        onAssignStaff={handleAssignStaff}
+      />
+
+      <UserFormModal
         open={open}
+        form={form}
         onCancel={() => {
           setOpen(false);
           form.resetFields();
         }}
-        onOk={() => form.submit()}
-        okText="Lưu"
-        cancelText="Hủy"
-        destroyOnClose
-      >
-        <Form
-          labelCol={{ span: 24 }}
-          form={form}
-          onFinish={handleSubmitForm}
-          preserve={false}
-        >
-          <Form.Item name="driverId" label="Driver ID" hidden>
-            <Input />
-          </Form.Item>
+        onFinish={handleSubmitForm}
+      />
 
-          <Form.Item
-            label="Tên đăng nhập"
-            name="userName"
-            rules={[
-              { required: true, message: "Vui lòng nhập tên đăng nhập" },
-              {
-                min: 3,
-                message: "Tên đăng nhập phải tối thiểu 3 ký tự",
-              },
-            ]}
-          >
-            <Input placeholder="Nhập tên đăng nhập" />
-          </Form.Item>
-
-          <Form.Item
-            label={
-              form.getFieldValue("driverId")
-                ? "Mật khẩu (nếu muốn đổi)"
-                : "Mật khẩu"
-            }
-            name="password"
-            rules={
-              form.getFieldValue("driverId")
-                ? []
-                : [{ required: true, message: "Vui lòng nhập mật khẩu" }]
-            }
-          >
-            <Input.Password
-              placeholder={
-                form.getFieldValue("driverId")
-                  ? "Để trống nếu không muốn đổi mật khẩu"
-                  : "Nhập mật khẩu"
-              }
-            />
-          </Form.Item>
-
-          <Form.Item
-            label="Email"
-            name="email"
-            rules={[
-              { required: true, message: "Vui lòng nhập email" },
-              { type: "email", message: "Email không hợp lệ" },
-            ]}
-          >
-            <Input placeholder="Nhập email" />
-          </Form.Item>
-
-          <Form.Item
-            label="Họ tên"
-            name="fullName"
-            rules={[{ required: true, message: "Vui lòng nhập họ tên đầy đủ" }]}
-          >
-            <Input placeholder="Nhập họ tên" />
-          </Form.Item>
-
-          <Form.Item
-            label="Trạng thái"
-            name="status"
-            valuePropName="checked"
-            initialValue={true}
-          >
-            <Switch
-              checkedChildren="Đang hoạt động"
-              unCheckedChildren="Ngừng"
-            />
-          </Form.Item>
-
-          <Form.Item
-            label="Vai trò"
-            name="role"
-            tooltip="Tạo mới luôn là STAFF (đặt qua query userRoleChoice=STAFF)"
-          >
-            <Select disabled placeholder="STAFF">
-              <Select.Option value="ADMIN">ADMIN</Select.Option>
-              <Select.Option value="STAFF">STAFF</Select.Option>
-              <Select.Option value="DRIVER">DRIVER</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Modal Assign Staff */}
-      <Modal
+      <AssignStaffModal
         open={assignOpen}
-        title={
-          assigningUser
-            ? `Assign Staff - ${
-                assigningUser.fullName || assigningUser.userName
-              }`
-            : "Assign Staff"
-        }
+        form={assignForm}
+        assigningUser={assigningUser}
+        submitting={assignSubmitting}
         onCancel={() => {
           setAssignOpen(false);
           assignForm.resetFields();
           setAssigningUser(null);
         }}
-        onOk={submitAssignStaff}
-        okText="Gán vào trạm"
-        cancelText="Hủy"
-        confirmLoading={assignSubmitting}
-        destroyOnClose
-      >
-        <Form form={assignForm} layout="vertical">
-          <Form.Item
-            label="Driver ID"
-            name="driverId"
-            rules={[{ required: true, message: "Thiếu Driver ID" }]}
-          >
-            <InputNumber style={{ width: "100%" }} disabled />
-          </Form.Item>
-
-          <Form.Item
-            label="Station ID"
-            name="stationId"
-            rules={[{ required: true, message: "Vui lòng nhập Station ID" }]}
-          >
-            <InputNumber style={{ width: "100%" }} min={1} />
-          </Form.Item>
-
-          <Form.Item
-            label="Ca làm việc (workShift)"
-            name="workShift"
-            rules={[{ required: true, message: "Vui lòng nhập ca làm việc" }]}
-          >
-            <Input placeholder="Ca sáng, ca tối..." />
-          </Form.Item>
-
-          <Form.Item label="Ghi chú" name="notes">
-            <Input.TextArea rows={3} placeholder="Ghi chú" />
-          </Form.Item>
-
-          <Form.Item
-            label="Kích hoạt"
-            name="active"
-            valuePropName="checked"
-            initialValue={true}
-          >
-            <Switch checkedChildren="Đang active" unCheckedChildren="Ngừng" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        onSubmit={submitAssignStaff}
+      />
     </>
   );
 };

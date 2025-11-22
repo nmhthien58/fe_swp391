@@ -222,19 +222,6 @@ const PlanHistory = () => {
       render: (_, r) => statusTag(r?.status),
       width: 120,
     },
-    // {
-    //   title: "Thanh toán",
-    //   key: "payment",
-    //   render: (_, r) => (
-    //     <Space direction="vertical" size={0}>
-    //       {paymentTag(r?.payment)}
-    //       {r?.payment?.amountVnd != null && (
-    //         <Text style={{ fontSize: 12 }}>{vnd(r.payment.amountVnd)}</Text>
-    //       )}
-    //     </Space>
-    //   ),
-    //   width: 140,
-    // },
   ];
 
   return (
@@ -269,23 +256,7 @@ const PlanHistory = () => {
         </Space>
 
         {/* Tổng tiền đã thanh toán */}
-        {/* <div
-          style={{
-            background: "#f6ffed",
-            border: "1px solid #b7eb8f",
-            borderRadius: 8,
-            padding: "10px 16px",
-          }}
-        >
-          <Text strong style={{ fontSize: 15 }}>
-            Tổng tiền thanh toán thành công:
-          </Text>{" "}
-          <Text style={{ fontSize: 15, color: "#1677ff", fontWeight: 600 }}>
-            {vnd(totalPaid)}
-          </Text>
-        </div> */}
 
-        {/* NEW: Tổng tiền gói active */}
         <div
           style={{
             background: "#e6f7ff",

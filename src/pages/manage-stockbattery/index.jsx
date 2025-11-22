@@ -1,17 +1,6 @@
-// src/pages/ManageStockBattery.jsx
+// src/pages/manage-stockbattery/index.jsx
 import React, { useEffect, useState } from "react";
-import {
-  Button,
-  Checkbox,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Table,
-  Tag,
-  message,
-  Space,
-} from "antd";
+import { Button, Space, message } from "antd";
 import { useForm } from "antd/es/form/Form";
 import {
   getBatteries,
@@ -21,25 +10,16 @@ import {
   getBatteriesByStationId,
 } from "../../services/batteries";
 import api from "../../config/axios";
+import BatteryStats from "./BatteryStats";
+import BatteryFilters from "./BatteryFilter";
+import BatteryTable from "./BatteryTable";
+import CreateBatteryModal from "./CreateBatteryModal";
+import PatchBatteryModal from "./PatchBatteryModal";
 
-const statusStyle = {
-  FULL: { color: "green", text: "Đầy" },
-  AVAILABLE: { color: "cyan", text: "Sẵn sàng" }, // AVAILABLE
-  EMPTY: { color: "red", text: "Hết" },
-  CHARGING: { color: "blue", text: "Đang sạc" },
-  RESERVED: { color: "black", text: "Đã giữ chỗ" },
-  FULLY_CHARGED: { color: "green", text: "Sạc đầy" },
-  IN_USE: { color: "purple", text: "Đang sử dụng" },
-  MAINTENANCE: { color: "orange", text: "Bảo dưỡng" },
-  DAMAGED: { color: "error", text: "Hỏng" },
-};
+const API_PAGE_SIZE = 50; // số pin lấy từ API
+const UI_PAGE_SIZE = 7; // số pin hiển thị mỗi trang trên Table
 
-// số lượng pin lấy từ API mỗi lần
-const API_PAGE_SIZE = 50;
-// số lượng pin hiển thị trên table mỗi trang
-const UI_PAGE_SIZE = 7;
-
-export default function ManageStockBattery() {
+const ManageStockBattery = () => {
   const [formCreate] = useForm();
   const [formPatch] = useForm();
 
@@ -47,13 +27,8 @@ export default function ManageStockBattery() {
   const [openPatch, setOpenPatch] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [data, setData] = useState([]);
-  // eslint-disable-next-line no-unused-vars
-  const [total, setTotal] = useState(0);
-
-  // phân trang trên UI (Table)
+  const [batteries, setBatteries] = useState([]);
   const [page, setPage] = useState(1);
-
   const [currentBattery, setCurrentBattery] = useState(null);
 
   const [stats, setStats] = useState({
@@ -65,12 +40,13 @@ export default function ManageStockBattery() {
     EMPTY: 0,
   });
 
-  // ====== station dropdown ======
-  const [stationQuery, setStationQuery] = useState("");
-  const [isStationMode, setIsStationMode] = useState(false);
+  // station filter
   const [stations, setStations] = useState([]);
   const [loadingStations, setLoadingStations] = useState(false);
+  const [stationQuery, setStationQuery] = useState("");
+  const [isStationMode, setIsStationMode] = useState(false);
 
+  // ===== helpers =====
   const applyStats = (items) => {
     const counts = {
       FULL: 0,
@@ -86,26 +62,21 @@ export default function ManageStockBattery() {
     setStats(counts);
   };
 
-  // ====== FETCH PIN (mặc định 50 / page từ API, chỉ gọi 1 lần) ======
-  const fetchData = async () => {
+  // ===== API =====
+  const fetchBatteries = async () => {
     setLoading(true);
     try {
-      const res = await getBatteries({
-        page: 0,
-        size: API_PAGE_SIZE,
-      });
-
+      const res = await getBatteries({ page: 0, size: API_PAGE_SIZE });
       const items = res?.content || [];
-      setData(items);
-      setTotal(res?.totalElements ?? items.length);
+      setBatteries(items);
       applyStats(items);
-      setPage(1); // reset về trang 1
+      setIsStationMode(false);
+      setPage(1);
     } finally {
       setLoading(false);
     }
   };
 
-  // lấy danh sách trạm cho dropdown
   const fetchStations = async () => {
     setLoadingStations(true);
     try {
@@ -117,14 +88,13 @@ export default function ManageStockBattery() {
     } catch (e) {
       console.error(e);
       message.error("Không tải được danh sách trạm");
-      setStations([]);
     } finally {
       setLoadingStations(false);
     }
   };
 
   useEffect(() => {
-    fetchData(); // 🔹 gọi 1 lần khi mount
+    fetchBatteries();
     fetchStations();
   }, []);
 
@@ -134,7 +104,7 @@ export default function ManageStockBattery() {
       message.success("Tạo pin thành công!");
       setOpenCreate(false);
       formCreate.resetFields();
-      fetchData(); // reload
+      fetchBatteries();
     } catch (e) {
       message.error(e?.response?.data?.message || "Tạo pin thất bại");
     }
@@ -147,13 +117,12 @@ export default function ManageStockBattery() {
       setOpenPatch(false);
       formPatch.resetFields();
       setCurrentBattery(null);
-      fetchData(); // reload
+      fetchBatteries();
     } catch (e) {
       message.error(e?.response?.data?.message || "Cập nhật thất bại");
     }
   };
 
-  // ====================== Lọc theo trạm ======================
   const handleSearchByStation = async () => {
     if (!stationQuery) {
       return message.warning("Vui lòng chọn trạm");
@@ -161,10 +130,9 @@ export default function ManageStockBattery() {
     setLoading(true);
     try {
       const list = await getBatteriesByStationId(stationQuery);
-      setIsStationMode(true);
-      setData(list);
-      setTotal(list.length);
+      setBatteries(list);
       applyStats(list);
+      setIsStationMode(true);
       setPage(1);
 
       const station = stations.find((s) => s.stationId === stationQuery);
@@ -181,83 +149,21 @@ export default function ManageStockBattery() {
     }
   };
 
-  const handleClearStationFilter = async () => {
+  const handleClearStationFilter = () => {
     setStationQuery("");
     setIsStationMode(false);
-    fetchData();
+    fetchBatteries();
   };
-  // ==============================================================
 
-  const columns = [
-    {
-      title: "Mã Pin (Serial)",
-      dataIndex: "serialNumber",
-      key: "serialNumber",
-      sorter: true, // sort client-side, không gọi API
-      render: (v) => v || "-",
-    },
-    {
-      title: "Dung lượng (Wh)",
-      dataIndex: "capacityWh",
-      key: "capacityWh",
-      sorter: true,
-      render: (v) => (v ?? v === 0 ? v : "-"),
-    },
-    {
-      title: "Trạng thái",
-      dataIndex: "status",
-      key: "status",
-      filters: BATTERY_STATUS.map((s) => ({
-        text: statusStyle[s]?.text || s,
-        value: s,
-      })),
-      onFilter: (value, record) => record.status === value,
-      render: (status) => {
-        const cfg = statusStyle[status] || {
-          color: "default",
-          text: status || "-",
-        };
-        return <Tag color={cfg.color}>{cfg.text}</Tag>;
-      },
-    },
-    {
-      title: "Thao tác",
-      key: "actions",
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="primary"
-            onClick={() => {
-              setCurrentBattery(record);
-              setOpenPatch(true);
-              formPatch.setFieldsValue({
-                status: record.status,
-                reason: "",
-                adminOverride: true,
-              });
-            }}
-          >
-            Cập nhật
-          </Button>
-        </Space>
-      ),
-    },
-  ];
-
-  // ============ STYLE helper ============
-  const statCard = (bg, border) => ({
-    flex: 1,
-    padding: 18,
-    background: bg,
-    borderRadius: 12,
-    border: `1px solid ${border}`,
-    boxShadow: "0 4px 12px rgba(15,23,42,0.06)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    justifyContent: "space-between",
-    minWidth: 160,
-  });
+  const handleOpenPatch = (battery) => {
+    setCurrentBattery(battery);
+    setOpenPatch(true);
+    formPatch.setFieldsValue({
+      status: battery.status,
+      reason: "",
+      adminOverride: true,
+    });
+  };
 
   return (
     <>
@@ -276,223 +182,75 @@ export default function ManageStockBattery() {
             style={{
               fontSize: 24,
               fontWeight: 700,
-              margin: 0,
-              color: "#111827",
+              marginBottom: 4,
             }}
           >
             Quản lý tồn kho pin
           </h2>
-          <p
-            style={{
-              margin: 0,
-              marginTop: 4,
-              color: "#6b7280",
-              fontSize: 13,
-            }}
-          >
+          <p style={{ margin: 0, color: "#64748b" }}>
             Theo dõi trạng thái pin tại các trạm và cập nhật nhanh.
           </p>
         </div>
+
+        <Space>
+          <Button type="default" onClick={fetchBatteries}>
+            Tải lại dữ liệu
+          </Button>
+          <Button type="primary" onClick={() => setOpenCreate(true)}>
+            Thêm pin mới
+          </Button>
+        </Space>
       </div>
 
-      {/* Thống kê nhanh */}
-      <div
-        style={{
-          display: "flex",
-          gap: 16,
-          marginBottom: 20,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={statCard("#ecfdf5", "#a7f3d0")}>
-          <div style={{ fontSize: 13, color: "#047857" }}>Pin Đầy</div>
-          <div style={{ fontSize: 28, fontWeight: "bold", color: "#10b981" }}>
-            {stats.FULL ?? 0}
-          </div>
-        </div>
+      {/* Stats */}
+      <BatteryStats stats={stats} />
 
-        <div style={statCard("#e0f2fe", "#bae6fd")}>
-          <div style={{ fontSize: 13, color: "#0369a1" }}>Pin Available</div>
-          <div style={{ fontSize: 28, fontWeight: "bold", color: "#0891b2" }}>
-            {stats.AVAILABLE ?? 0}
-          </div>
-        </div>
-
-        <div style={statCard("#eff6ff", "#bfdbfe")}>
-          <div style={{ fontSize: 13, color: "#1e40af" }}>Pin Đang Sạc</div>
-          <div style={{ fontSize: 28, fontWeight: "bold", color: "#2563eb" }}>
-            {stats.CHARGING ?? 0}
-          </div>
-        </div>
-
-        <div style={statCard("#f5f3ff", "#ddd6fe")}>
-          <div style={{ fontSize: 13, color: "#5b21b6" }}>Pin Đang Sử Dụng</div>
-          <div style={{ fontSize: 28, fontWeight: "bold", color: "#7c3aed" }}>
-            {stats.IN_USE ?? 0}
-          </div>
-        </div>
-
-        <div style={statCard("#fff7ed", "#fed7aa")}>
-          <div style={{ fontSize: 13, color: "#c2410c" }}>Pin Bảo Dưỡng</div>
-          <div style={{ fontSize: 28, fontWeight: "bold", color: "#ea580c" }}>
-            {stats.MAINTENANCE ?? 0}
-          </div>
-        </div>
-
-        <div style={statCard("#fef2f2", "#fecaca")}>
-          <div style={{ fontSize: 13, color: "#b91c1c" }}>Pin Hết</div>
-          <div style={{ fontSize: 28, fontWeight: "bold", color: "#ef4444" }}>
-            {stats.EMPTY ?? 0}
-          </div>
-        </div>
-      </div>
-
-      {/* Thanh điều khiển */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 16,
-          flexWrap: "wrap",
-          padding: "10px 12px",
-          borderRadius: 12,
-          background: "#f9fafb",
-          border: "1px solid #e5e7eb",
-        }}
-      >
-        <Button type="primary" onClick={() => setOpenCreate(true)}>
-          Thêm pin mới
-        </Button>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Select
-            showSearch
-            placeholder="Chọn trạm…"
-            style={{ width: 260 }}
-            loading={loadingStations}
-            allowClear
-            optionFilterProp="label"
-            value={stationQuery || undefined}
-            onChange={(value) => setStationQuery(value || "")}
-            options={stations.map((s) => ({
-              value: s.stationId,
-              label: `${s.name || `Trạm #${s.stationId}`} (ID: ${s.stationId})`,
-            }))}
-          />
-          <Button onClick={handleSearchByStation}>Tìm theo trạm</Button>
-          {isStationMode && (
-            <Button onClick={handleClearStationFilter}>Xóa lọc</Button>
-          )}
-        </div>
-      </div>
-
-      {/* Bảng pin */}
-      <Table
-        rowKey={(r) => String(r.batteryId)}
-        loading={loading}
-        dataSource={data}
-        columns={columns}
-        // eslint-disable-next-line no-unused-vars
-        onChange={(pagination, _filters, _sorterArg) => {
-          // chỉ update page UI, không đụng tới sorter → không gọi API lại
-          setPage(pagination.current);
-        }}
-        pagination={{
-          current: page,
-          pageSize: UI_PAGE_SIZE,
-          total: data.length,
-          showSizeChanger: false,
-        }}
+      {/* Filters */}
+      <BatteryFilters
+        stationQuery={stationQuery}
+        setStationQuery={setStationQuery}
+        stations={stations}
+        loadingStations={loadingStations}
+        isStationMode={isStationMode}
+        onApply={handleSearchByStation}
+        onClear={handleClearStationFilter}
       />
 
-      {/* Modal CREATE */}
-      <Modal
-        title="Thêm Pin Mới"
+      {/* Table */}
+      <BatteryTable
+        data={batteries}
+        loading={loading}
+        page={page}
+        setPage={setPage}
+        pageSize={UI_PAGE_SIZE}
+        onOpenPatch={handleOpenPatch}
+        BATTERY_STATUS={BATTERY_STATUS}
+      />
+
+      {/* Modals */}
+      <CreateBatteryModal
         open={openCreate}
         onCancel={() => setOpenCreate(false)}
-        onOk={() => formCreate.submit()}
-        okText="Tạo"
-      >
-        <Form form={formCreate} layout="vertical" onFinish={handleCreate}>
-          <Form.Item
-            label="Trạm"
-            name="stationId"
-            rules={[{ required: true, message: "Vui lòng chọn trạm" }]}
-          >
-            <Select
-              showSearch
-              placeholder="Chọn trạm"
-              loading={loadingStations}
-              optionFilterProp="label"
-              options={stations.map((s) => ({
-                value: s.stationId,
-                label: `${s.name || `Trạm #${s.stationId}`} (ID: ${
-                  s.stationId
-                })`,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item
-            label="Status"
-            name="status"
-            rules={[{ required: true, message: "Vui lòng chọn Status" }]}
-          >
-            <Select placeholder="Chọn status">
-              {BATTERY_STATUS.map((s) => (
-                <Select.Option key={s} value={s}>
-                  {statusStyle[s]?.text || s}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
+        form={formCreate}
+        stations={stations}
+        loadingStations={loadingStations}
+        onSubmit={handleCreate}
+        BATTERY_STATUS={BATTERY_STATUS}
+      />
 
-      {/* Modal PATCH STATUS */}
-      <Modal
-        title={
-          currentBattery
-            ? `Đổi trạng thái: ${currentBattery.serialNumber}`
-            : "Đổi trạng thái pin"
-        }
+      <PatchBatteryModal
         open={openPatch}
         onCancel={() => {
           setOpenPatch(false);
           setCurrentBattery(null);
         }}
-        onOk={() => formPatch.submit()}
-        okText="Lưu"
-      >
-        <Form form={formPatch} layout="vertical" onFinish={handlePatch}>
-          <Form.Item
-            label="Trạng thái mới"
-            name="status"
-            rules={[{ required: true, message: "Chọn trạng thái" }]}
-          >
-            <Select placeholder="Chọn status">
-              {BATTERY_STATUS.map((s) => (
-                <Select.Option key={s} value={s}>
-                  {statusStyle[s]?.text || s}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item label="Lý do (tuỳ chọn)" name="reason">
-            <Input.TextArea placeholder="Nhập lý do thay đổi..." rows={3} />
-          </Form.Item>
-
-          <Form.Item
-            name="adminOverride"
-            valuePropName="checked"
-            initialValue={true}
-          >
-            <Checkbox>Admin override</Checkbox>
-          </Form.Item>
-        </Form>
-      </Modal>
+        form={formPatch}
+        currentBattery={currentBattery}
+        onSubmit={handlePatch}
+        BATTERY_STATUS={BATTERY_STATUS}
+      />
     </>
   );
-}
+};
+
+export default ManageStockBattery;

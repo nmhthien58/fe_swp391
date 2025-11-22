@@ -1,4 +1,3 @@
-// src/services/batteries.js
 import api from "../config/axios";
 
 // params hỗ trợ: status, model, stationId, capacityMin, capacityMax, page, size, sort
